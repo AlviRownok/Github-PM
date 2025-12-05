@@ -9,9 +9,9 @@ import pandas as pd
 from dotenv import load_dotenv
 from jinja2 import Template
 
-# ------------------------------------------------------------
-# Configurazione base
-# ------------------------------------------------------------
+# ============================================================
+# Configurazione e costanti
+# ============================================================
 
 load_dotenv()
 
@@ -24,8 +24,12 @@ RPMLOGO_PATH = os.path.join(ASSETS_DIR, "rpmlogo.png")
 RPMSOFT_PATH = os.path.join(ASSETS_DIR, "rpmsoft.png")
 
 
+# ============================================================
+# Helper generali
+# ============================================================
+
 def get_inline_logo(path: str) -> str:
-    """Ritorna un file immagine come base64, oppure stringa vuota."""
+    """Ritorna il file immagine come base64, oppure stringa vuota."""
     try:
         with open(path, "rb") as f:
             data = f.read()
@@ -34,9 +38,14 @@ def get_inline_logo(path: str) -> str:
         return ""
 
 
-# ------------------------------------------------------------
-# Helper GitHub
-# ------------------------------------------------------------
+def parse_iso_date(value):
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
 
 def parse_github_url(url: str):
     """Estrae owner, repo e branch da una URL GitHub."""
@@ -54,6 +63,7 @@ def parse_github_url(url: str):
     owner = parts[0]
     repo = parts[1]
 
+    # Branch di default: dev
     branch = "dev"
     if len(parts) >= 4 and parts[2] == "tree":
         branch = parts[3]
@@ -62,7 +72,7 @@ def parse_github_url(url: str):
 
 
 def github_get(path: str, params=None):
-    """Chiama la GitHub API e ritorna il JSON o solleva RuntimeError."""
+    """Chiama la GitHub API e ritorna JSON oppure solleva RuntimeError."""
     if params is None:
         params = {}
 
@@ -77,6 +87,7 @@ def github_get(path: str, params=None):
     resp = requests.get(url, headers=headers, params=params, timeout=20)
 
     if resp.status_code == 202:
+        # Statistiche non ancora pronte
         return None
 
     if resp.status_code == 403:
@@ -101,32 +112,27 @@ def github_get(path: str, params=None):
         raise RuntimeError(f"Impossibile decodificare risposta GitHub: {exc}") from exc
 
 
-def parse_iso_date(value):
-    if not value:
-        return None
-    try:
-        return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except Exception:
-        return None
-
-
-# ------------------------------------------------------------
+# ============================================================
 # Raccolta dati per cruscotto repository
-# ------------------------------------------------------------
+# ============================================================
 
 def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     """
     Recupera tutti i dati necessari per il cruscotto.
-    Indicatori autore: solo commit specifici del branch.
+    Per gli autori considera solo commit specifici del branch
+    (non presenti anche nel default branch).
     """
+
     repo_info = github_get(f"/repos/{owner}/{repo}")
     default_branch = repo_info.get("default_branch") or "main"
 
+    # Commit del branch selezionato
     commits_branch_raw = github_get(
         f"/repos/{owner}/{repo}/commits",
         params={"per_page": 100, "sha": branch},
     )
 
+    # Commit del branch di default, per filtrare quelli condivisi
     default_shas = set()
     if branch != default_branch:
         commits_default_raw = github_get(
@@ -146,23 +152,22 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 continue
             commits_raw.append(c)
 
+    # Issue, PR, contributor, attività settimanale
     issues_raw = github_get(
         f"/repos/{owner}/{repo}/issues",
         params={"state": "all", "per_page": 50},
     )
-
     pulls_raw = github_get(
         f"/repos/{owner}/{repo}/pulls",
         params={"state": "all", "per_page": 50},
     )
-
     contributors_raw = github_get(
         f"/repos/{owner}/{repo}/contributors",
         params={"per_page": 10},
     )
-
     commit_activity = github_get(f"/repos/{owner}/{repo}/stats/commit_activity")
 
+    # Commit branch specifico + autori
     commits = []
     author_map = {}
     if isinstance(commits_raw, list):
@@ -212,10 +217,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     for a in author_map.values():
         first_date = a["first_date"]
         last_date = a["last_date"]
-        if first_date and last_date:
-            days_active = (last_date.date() - first_date.date()).days + 1
-        else:
-            days_active = 0
+        days_active = (last_date.date() - first_date.date()).days + 1 if first_date and last_date else 0
         author_overview.append(
             {
                 "id": a["id"],
@@ -227,10 +229,10 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
             }
         )
 
+    # Issue
     issues = []
     open_issues_count = 0
     closed_issues_count = 0
-
     if isinstance(issues_raw, list):
         for i in issues_raw:
             if "pull_request" in i:
@@ -240,7 +242,6 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 open_issues_count += 1
             else:
                 closed_issues_count += 1
-
             updated_at = parse_iso_date(i.get("updated_at"))
             issues.append(
                 {
@@ -248,13 +249,12 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                     "title": i.get("title") or "",
                     "state": state,
                     "assignee": (i.get("assignee") or {}).get("login"),
-                    "updated_display": updated_at.strftime("%Y-%m-%d %H:%M")
-                    if updated_at
-                    else "",
+                    "updated_display": updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else "",
                     "url": i.get("html_url"),
                 }
             )
 
+    # PR
     pulls = []
     open_pr_count = 0
     closed_pr_count = 0
@@ -265,7 +265,6 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 open_pr_count += 1
             else:
                 closed_pr_count += 1
-
             updated_at = parse_iso_date(p.get("updated_at"))
             pulls.append(
                 {
@@ -273,13 +272,12 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                     "title": p.get("title") or "",
                     "state": state,
                     "author": (p.get("user") or {}).get("login"),
-                    "updated_display": updated_at.strftime("%Y-%m-%d %H:%M")
-                    if updated_at
-                    else "",
+                    "updated_display": updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else "",
                     "url": p.get("html_url"),
                 }
             )
 
+    # Contributor
     contributors = []
     if isinstance(contributors_raw, list):
         for c in contributors_raw:
@@ -292,6 +290,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 }
             )
 
+    # Attività settimanale (repo intero)
     commit_weeks = []
     if isinstance(commit_activity, list):
         for item in commit_activity[-12:]:
@@ -343,14 +342,14 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     return dashboard
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Attività autore 360
-# ------------------------------------------------------------
+# ============================================================
 
 def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
     """
     Statistiche dettagliate per un autore su un branch.
-    Usa solo i commit specifici di quel branch.
+    Usa solo commit specifici di quel branch.
     """
     dashboard = collect_repo_dashboard_data(owner, repo, branch)
     commits_all = dashboard["commits"]
@@ -369,6 +368,7 @@ def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
     last_date = author_commits_sorted[-1]["date"]
     days_active = (last_date.date() - first_date.date()).days + 1 if first_date and last_date else 0
 
+    # Attività per giorno
     activity_by_day_map = {}
     for c in author_commits_sorted:
         if not c["date"]:
@@ -381,6 +381,7 @@ def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
         for k, v in sorted(activity_by_day_map.items(), key=lambda kv: kv[0])
     ]
 
+    # Dettagli diff per massimo 50 commit
     total_additions = 0
     total_deletions = 0
     total_files_changed = 0
@@ -443,9 +444,9 @@ def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
     return summary, enriched_commits
 
 
-# ------------------------------------------------------------
-# Template HTML per il report autore (download)
-# ------------------------------------------------------------
+# ============================================================
+# Template HTML report autore
+# ============================================================
 
 AUTHOR_REPORT_TEMPLATE = Template(r"""
 <!DOCTYPE html>
@@ -537,7 +538,6 @@ AUTHOR_REPORT_TEMPLATE = Template(r"""
             color: #9ca3af;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <header>
@@ -633,36 +633,6 @@ AUTHOR_REPORT_TEMPLATE = Template(r"""
         {% endif %}
     </div>
 </div>
-
-<script>
-{% if summary.activity_by_day %}
-    const adLabels = {{ summary.activity_by_day | map(attribute="label") | list | tojson }};
-    const adValues = {{ summary.activity_by_day | map(attribute="total") | list | tojson }};
-    const canvas1 = document.createElement('canvas');
-    canvas1.height = 80;
-    document.querySelector('.container').insertBefore(canvas1, document.querySelector('.section:nth-of-type(2)'));
-    const ctxAD = canvas1.getContext('2d');
-    new Chart(ctxAD, {
-        type: 'line',
-        data: {
-            labels: adLabels,
-            datasets: [{
-                label: 'Commit al giorno',
-                data: adValues,
-                tension: 0.2,
-                borderColor: 'rgba(248,113,113,1)',
-                backgroundColor: 'rgba(248,113,113,0.2)',
-            }]
-        },
-        options: {
-            scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true }
-            }
-        }
-    });
-{% endif %}
-</script>
 </body>
 </html>
 """)
@@ -677,9 +647,9 @@ def generate_author_report_html(summary, commits) -> str:
     )
 
 
-# ------------------------------------------------------------
-# Streamlit UI a schede
-# ------------------------------------------------------------
+# ============================================================
+# Streamlit UI
+# ============================================================
 
 def main():
     st.set_page_config(
@@ -688,7 +658,7 @@ def main():
         layout="wide",
     )
 
-    # Tema scuro e accenti rossi
+    # Stile scuro semplice
     st.markdown(
         """
         <style>
@@ -720,6 +690,12 @@ def main():
 
     st.write("")
 
+    # Stato globale per tenere i dati tra i click
+    if "dashboard_data" not in st.session_state:
+        st.session_state.dashboard_data = None
+    if "last_error" not in st.session_state:
+        st.session_state.last_error = None
+
     # Input URL repository
     default_url = "https://github.com/gamdevelop2024/GAM-Anonymization/tree/dev"
     repo_url = st.text_input(
@@ -727,46 +703,52 @@ def main():
         value=default_url,
         help="Accetta sia https://github.com/owner/repo sia https://github.com/owner/repo/tree/dev",
     )
-    load_btn = st.button("Carica dati")
+    load_btn = st.button("Carica cruscotto")
 
-    dashboard_data = None
-    if load_btn and repo_url.strip():
+    if load_btn:
         try:
             owner, repo, branch = parse_github_url(repo_url)
-            dashboard_data = collect_repo_dashboard_data(owner, repo, branch)
+            data = collect_repo_dashboard_data(owner, repo, branch)
+            st.session_state.dashboard_data = data
+            st.session_state.last_error = None
         except Exception as exc:
-            st.error(f"Errore: {exc}")
+            st.session_state.dashboard_data = None
+            st.session_state.last_error = str(exc)
 
+    if st.session_state.last_error:
+        st.error(st.session_state.last_error)
+
+    dashboard_data = st.session_state.dashboard_data
     if not dashboard_data:
-        st.info("Inserisci una URL valida e premi 'Carica dati' per vedere il cruscotto.")
+        st.info("Inserisci una URL valida e premi 'Carica cruscotto' per vedere il cruscotto.")
         return
 
     overview = dashboard_data["overview"]
 
-    # Schede principali
+    # Tabs
     tab_pan, tab_issues, tab_contrib, tab_author = st.tabs(
         ["Panoramica", "Issue e Pull request", "Contributor", "Autori 360"]
     )
 
     # --------------------------------------------------------
-    # TAB 1 - Panoramica
+    # Tab Panoramica
     # --------------------------------------------------------
     with tab_pan:
         st.markdown("#### Panoramica repository")
 
         top1, top2, top3, top4 = st.columns(4)
         top1.metric("Repository", overview["full_name"])
-        top2.metric("Branch attivo (cruscotto)", dashboard_data["branch"])
-        top3.metric("Branch predefinito (GitHub)", overview["default_branch"])
+        top2.metric("Branch attivo", dashboard_data["branch"])
+        top3.metric("Branch predefinito", overview["default_branch"])
         top4.metric("Linguaggio", overview["language"] or "Non definito")
 
         mid1, mid2, mid3, mid4, mid5 = st.columns(5)
         mid1.metric("Stelle", overview["stars"])
         mid2.metric("Fork", overview["forks"])
         mid3.metric("Osservatori", overview["watchers"])
-        mid4.metric("Issue totali aperte", overview["open_issues"])
+        mid4.metric("Issue aperte totali", overview["open_issues"])
         mid5.metric(
-            "Issue aperte/chiuse",
+            "Issue aperte/chiuse (ultime 50)",
             f"{dashboard_data['open_issues_count']} / {dashboard_data['closed_issues_count']}",
         )
 
@@ -775,16 +757,16 @@ def main():
             f"[Apri su GitHub]({dashboard_data['repo_url']})"
         )
 
-        st.markdown("##### Attività commit (ultime settimane, livello repository)")
+        st.markdown("##### Attività commit (ultime 12 settimane, livello repository)")
         if dashboard_data["commit_weeks"]:
             df_weeks = pd.DataFrame(dashboard_data["commit_weeks"])
             df_weeks = df_weeks.rename(columns={"label": "Settimana", "total": "Commit"})
             df_weeks = df_weeks.set_index("Settimana")
             st.line_chart(df_weeks)
         else:
-            st.caption("Nessun dato di attività commit disponibile.")
+            st.caption("Nessun dato di attività commit disponibile (GitHub potrebbe essere ancora in elaborazione).")
 
-        st.markdown("##### Commit recenti sul branch (solo commit specifici del branch)")
+        st.markdown("##### Commit recenti sul branch (solo commit specifici)")
         if dashboard_data["commits"]:
             df_commits = pd.DataFrame(dashboard_data["commits"]).rename(
                 columns={
@@ -814,13 +796,13 @@ def main():
             st.caption("Nessuna attività autori trovata per questo branch.")
 
     # --------------------------------------------------------
-    # TAB 2 - Issue e PR
+    # Tab Issue e PR
     # --------------------------------------------------------
     with tab_issues:
         left, right = st.columns(2)
 
         with left:
-            st.markdown("#### Issue")
+            st.markdown("#### Issue (ultime 50)")
             if dashboard_data["issues"]:
                 df_issues = pd.DataFrame(dashboard_data["issues"]).rename(
                     columns={
@@ -837,7 +819,7 @@ def main():
                 st.caption("Nessuna issue trovata.")
 
         with right:
-            st.markdown("#### Pull request")
+            st.markdown("#### Pull request (ultime 50)")
             if dashboard_data["pulls"]:
                 df_pr = pd.DataFrame(dashboard_data["pulls"]).rename(
                     columns={
@@ -854,10 +836,10 @@ def main():
                 st.caption("Nessuna pull request trovata.")
 
     # --------------------------------------------------------
-    # TAB 3 - Contributor
+    # Tab Contributor
     # --------------------------------------------------------
     with tab_contrib:
-        st.markdown("#### Principali contributor (livello repository)")
+        st.markdown("#### Principali contributor (repo intera)")
         if dashboard_data["contributors"]:
             df_contrib = pd.DataFrame(dashboard_data["contributors"]).rename(
                 columns={
@@ -872,7 +854,7 @@ def main():
             st.caption("Nessun contributor trovato.")
 
     # --------------------------------------------------------
-    # TAB 4 - Autori 360
+    # Tab Autori 360
     # --------------------------------------------------------
     with tab_author:
         st.markdown("#### Vista 360 autore sul branch selezionato")
@@ -885,7 +867,7 @@ def main():
             selected_display = st.selectbox("Seleziona autore", list(options.keys()))
             author_id = options[selected_display]
 
-            if st.button("Carica vista 360 per autore"):
+            if st.button("Calcola vista 360 autore"):
                 try:
                     summary, commits = compute_author_activity(
                         dashboard_data["owner"],
@@ -947,15 +929,7 @@ def main():
                             "file_names": "Nomi file",
                         }
                     )[
-                        [
-                            "Data",
-                            "SHA",
-                            "Messaggio",
-                            "Righe +",
-                            "Righe -",
-                            "File modificati",
-                            "Nomi file",
-                        ]
+                        ["Data", "SHA", "Messaggio", "Righe +", "Righe -", "File modificati", "Nomi file"]
                     ]
                     st.dataframe(df_c, use_container_width=True, hide_index=True)
                 else:
