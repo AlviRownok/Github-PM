@@ -665,12 +665,37 @@ def main():
         .stApp {
             background-color: #050509;
         }
+        /* Usa tutta la larghezza e sposta il contenuto sotto la toolbar Streamlit */
         .block-container {
-            padding-top: 1rem;
-            max-width: 1200px;
-            margin-left: auto;
-            margin-right: auto;
+            padding-top: 4rem !important;         /* sotto l'header interno di Streamlit */
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+            max-width: 100% !important;           /* niente colonne centrali strette */
+            margin-left: 0 !important;
+            margin-right: 0 !important;
         }
+
+        /* Metriche in stile card per allineare visivamente la "Panoramica" */
+        div[data-testid="stMetric"] {
+            background: #020617;
+            border-radius: 10px;
+            padding: 8px 12px;
+            border: 1px solid #1f2937;
+        }
+        div[data-testid="stMetricLabel"] {
+            color: #9ca3af;
+            font-size: 0.8rem;
+        }
+        div[data-testid="stMetricValue"] {
+            color: #f9fafb;
+            font-size: 1.2rem;
+        }
+
+        /* Riduci un po' lo spazio sotto gli h4, tipo "Panoramica repository" */
+        h4 {
+            margin-bottom: 0.5rem !important;
+        }
+
         table {
             color: #e5e7eb !important;
         }
