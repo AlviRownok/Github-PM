@@ -23,12 +23,6 @@ ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 RPMLOGO_PATH = os.path.join(ASSETS_DIR, "rpmlogo.png")
 RPMSOFT_PATH = os.path.join(ASSETS_DIR, "rpmsoft.png")
 
-st.set_page_config(
-    page_title="Cruscotto Progetto GitHub",
-    page_icon="https://raw.githubusercontent.com/AlviRownok/Github-PM/main/assets/rpmlogo.png",
-    layout="wide"
-)
-
 # ============================================================
 # Helper generali
 # ============================================================
@@ -659,7 +653,7 @@ def generate_author_report_html(summary, commits) -> str:
 def main():
     st.set_page_config(
         page_title="GitHub PM Dashboard",
-        page_icon="📊",
+        page_icon="https://raw.githubusercontent.com/AlviRownok/Github-PM/main/assets/rpmlogo.png",
         layout="wide",
     )
 
