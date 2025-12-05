@@ -5,32 +5,22 @@ import datetime as dt
 from urllib.parse import urlparse
 
 import requests
-import jwt
 import pandas as pd
 import streamlit as st
 from jinja2 import Template
 
 # ------------------------------------------------------------
-# Config letta da environment (o secrets su Streamlit Cloud)
+# Config da environment o secrets (Streamlit)
 # ------------------------------------------------------------
 
 GITHUB_API_BASE = "https://api.github.com"
 
+# Personal Access Token - preso da Streamlit secrets
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
-GITHUB_APP_INSTALLATION_ID = os.getenv("GITHUB_APP_INSTALLATION_ID")
-GITHUB_APP_PRIVATE_KEY_PATH = os.getenv("GITHUB_APP_PRIVATE_KEY_PATH")
-GITHUB_APP_PRIVATE_KEY = os.getenv("GITHUB_APP_PRIVATE_KEY")
-
-# Percorsi relativi logo (in repo)
+# Percorsi relativi per i loghi
 RPMLOGO_PATH = os.path.join("assets", "rpmlogo.png")
 RPMSOFT_PATH = os.path.join("assets", "rpmsoft.png")
-
-# Cache token installazione
-_APP_PRIVATE_KEY = None
-_INSTALLATION_TOKEN = None
-_INSTALLATION_TOKEN_EXPIRES_AT = 0  # epoch seconds
 
 
 # ------------------------------------------------------------
@@ -48,108 +38,15 @@ def get_inline_logo_data():
 
 
 # ------------------------------------------------------------
-# Autenticazione GitHub App
+# Autenticazione GitHub (solo PAT)
 # ------------------------------------------------------------
-
-def _load_app_private_key():
-    global _APP_PRIVATE_KEY
-
-    if _APP_PRIVATE_KEY is not None:
-        return _APP_PRIVATE_KEY
-
-    # Preferiamo la chiave direttamente dall env
-    if GITHUB_APP_PRIVATE_KEY:
-        _APP_PRIVATE_KEY = GITHUB_APP_PRIVATE_KEY
-        return _APP_PRIVATE_KEY
-
-    # Fallback: percorso file
-    if GITHUB_APP_PRIVATE_KEY_PATH:
-        try:
-            with open(GITHUB_APP_PRIVATE_KEY_PATH, "r", encoding="utf-8") as f:
-                _APP_PRIVATE_KEY = f.read()
-            return _APP_PRIVATE_KEY
-        except Exception:
-            return None
-
-    return None
-
-
-def _create_app_jwt():
-    """Crea un JWT per autenticarsi come GitHub App."""
-    private_key = _load_app_private_key()
-    if not private_key or not GITHUB_APP_ID:
-        return None
-
-    now = int(time.time())
-    payload = {
-        "iat": now - 60,
-        "exp": now + 600,
-        "iss": GITHUB_APP_ID,
-    }
-    token = jwt.encode(payload, private_key, algorithm="RS256")
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
-    return token
-
-
-def _refresh_installation_token():
-    """Usa JWT per ottenere installation access token."""
-    global _INSTALLATION_TOKEN, _INSTALLATION_TOKEN_EXPIRES_AT
-
-    if not GITHUB_APP_INSTALLATION_ID:
-        return None
-
-    app_jwt = _create_app_jwt()
-    if not app_jwt:
-        return None
-
-    url = f"{GITHUB_API_BASE}/app/installations/{GITHUB_APP_INSTALLATION_ID}/access_tokens"
-    headers = {
-        "Authorization": f"Bearer {app_jwt}",
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "gam-github-dashboard",
-    }
-    resp = requests.post(url, headers=headers, timeout=20)
-    if resp.status_code >= 400:
-        raise RuntimeError(
-            f"Errore creazione installation token: {resp.status_code} {resp.text}"
-        )
-    data = resp.json()
-    token = data.get("token")
-    expires_at = data.get("expires_at")
-
-    if not token:
-        raise RuntimeError("Installation token mancante nella risposta")
-
-    _INSTALLATION_TOKEN = token
-    if expires_at:
-        dt_exp = dt.datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-        _INSTALLATION_TOKEN_EXPIRES_AT = int(dt_exp.timestamp())
-    else:
-        _INSTALLATION_TOKEN_EXPIRES_AT = int(time.time()) + 50 * 60
-
-    return _INSTALLATION_TOKEN
-
 
 def get_github_auth_token():
     """
-    Token da usare per GitHub API.
-    1) GitHub App se configurata
-    2) GITHUB_TOKEN se presente
-    3) Nessuno
+    Ritorna il GITHUB_TOKEN.
+    Se non presente, le chiamate saranno anonime con forti limiti.
     """
-    global _INSTALLATION_TOKEN, _INSTALLATION_TOKEN_EXPIRES_AT
-
-    if GITHUB_APP_ID and GITHUB_APP_INSTALLATION_ID and (GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH):
-        now = int(time.time())
-        if not _INSTALLATION_TOKEN or now > (_INSTALLATION_TOKEN_EXPIRES_AT - 60):
-            _refresh_installation_token()
-        return _INSTALLATION_TOKEN
-
-    if GITHUB_TOKEN:
-        return GITHUB_TOKEN
-
-    return None
+    return GITHUB_TOKEN
 
 
 # ------------------------------------------------------------
@@ -157,7 +54,7 @@ def get_github_auth_token():
 # ------------------------------------------------------------
 
 def parse_github_url(url: str):
-    """Estrae owner, repo e branch da URL GitHub (accetta /tree/dev)."""
+    """Estrae owner, repo e branch da una URL GitHub (accetta /tree/dev)."""
     if not url:
         raise ValueError("URL vuota")
 
@@ -180,7 +77,7 @@ def parse_github_url(url: str):
 
 
 def github_get(path: str, params=None):
-    """Chiama GitHub API con il token corretto."""
+    """Chiama la GitHub API con il PAT (se disponibile)."""
     if params is None:
         params = {}
 
@@ -197,6 +94,7 @@ def github_get(path: str, params=None):
     resp = requests.get(url, headers=headers, params=params, timeout=20)
 
     if resp.status_code == 202:
+        # Statistiche in elaborazione
         return None
 
     if resp.status_code == 403:
@@ -239,14 +137,17 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     Dati per cruscotto repo.
     Commit autore solo specifici del branch (non presenti nel default branch).
     """
+    # Info repo
     repo_info = github_get(f"/repos/{owner}/{repo}")
     default_branch = repo_info.get("default_branch") or "main"
 
+    # Commit branch selezionato
     commits_branch_raw = github_get(
         f"/repos/{owner}/{repo}/commits",
         params={"per_page": 100, "sha": branch},
     )
 
+    # Commit default branch per filtrare quelli condivisi
     default_shas = set()
     if branch != default_branch:
         commits_default_raw = github_get(
@@ -266,6 +167,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 continue
             commits_raw.append(c)
 
+    # Issue, PR, contributor, attività settimanale a livello repo
     issues_raw = github_get(
         f"/repos/{owner}/{repo}/issues",
         params={"state": "all", "per_page": 50},
@@ -280,6 +182,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     )
     commit_activity = github_get(f"/repos/{owner}/{repo}/stats/commit_activity")
 
+    # Commit filtrati per branch e autori
     commits = []
     author_map = {}
     if isinstance(commits_raw, list):
@@ -341,6 +244,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
             }
         )
 
+    # Issue
     issues = []
     open_issues_count = 0
     closed_issues_count = 0
@@ -367,6 +271,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 }
             )
 
+    # Pull request
     pulls = []
     open_pr_count = 0
     closed_pr_count = 0
@@ -391,6 +296,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 }
             )
 
+    # Contributor
     contributors = []
     if isinstance(contributors_raw, list):
         for c in contributors_raw:
@@ -403,6 +309,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
                 }
             )
 
+    # Attività settimanale
     commit_weeks = []
     if isinstance(commit_activity, list):
         for item in commit_activity[-12:]:
@@ -420,7 +327,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     overview = {
         "full_name": repo_info.get("full_name"),
         "description": repo_info.get("description"),
-        "default_branch": default_branch,
+        "default_branch": repo_info.get("default_branch"),
         "stars": repo_info.get("stargazers_count"),
         "forks": repo_info.get("forks_count"),
         "watchers": repo_info.get("subscribers_count"),
@@ -550,7 +457,7 @@ def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
 
 
 # ------------------------------------------------------------
-# Template HTML per report autore (simile versione Flask)
+# Template HTML per report autore
 # ------------------------------------------------------------
 
 AUTHOR_HTML_TEMPLATE = Template(r"""
@@ -974,7 +881,6 @@ def main():
                 else:
                     st.info("Nessun commit trovato per questo autore.")
 
-                # Download HTML report
                 html_report = generate_author_html(summary, commits)
                 st.download_button(
                     label="Scarica report HTML autore",
