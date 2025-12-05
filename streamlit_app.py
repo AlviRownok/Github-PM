@@ -5,13 +5,13 @@ from urllib.parse import urlparse
 
 import requests
 import streamlit as st
+import pandas as pd
 from dotenv import load_dotenv
 from jinja2 import Template
-from streamlit.components.v1 import html as st_html
 
-# -------------------------------------------------------------------
-# Configurazione
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Configurazione base
+# ------------------------------------------------------------
 
 load_dotenv()
 
@@ -24,8 +24,8 @@ RPMLOGO_PATH = os.path.join(ASSETS_DIR, "rpmlogo.png")
 RPMSOFT_PATH = os.path.join(ASSETS_DIR, "rpmsoft.png")
 
 
-def get_inline_logo(path):
-    """Ritorna il logo indicato come base64, oppure stringa vuota in caso di errore."""
+def get_inline_logo(path: str) -> str:
+    """Ritorna un file immagine come base64, oppure stringa vuota."""
     try:
         with open(path, "rb") as f:
             data = f.read()
@@ -34,14 +34,12 @@ def get_inline_logo(path):
         return ""
 
 
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Helper GitHub
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def parse_github_url(url: str):
-    """
-    Estrae owner, repo e branch da una URL GitHub.
-    """
+    """Estrae owner, repo e branch da una URL GitHub."""
     if not url:
         raise ValueError("URL vuota")
 
@@ -64,9 +62,7 @@ def parse_github_url(url: str):
 
 
 def github_get(path: str, params=None):
-    """
-    Chiama la GitHub API e ritorna il JSON o solleva RuntimeError.
-    """
+    """Chiama la GitHub API e ritorna il JSON o solleva RuntimeError."""
     if params is None:
         params = {}
 
@@ -114,17 +110,15 @@ def parse_iso_date(value):
         return None
 
 
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Raccolta dati per cruscotto repository
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     """
     Recupera tutti i dati necessari per il cruscotto.
-    Gli indicatori autore sono calcolati solo sui commit specifici del branch,
-    cioè non presenti anche nel branch predefinito.
+    Indicatori autore: solo commit specifici del branch.
     """
-
     repo_info = github_get(f"/repos/{owner}/{repo}")
     default_branch = repo_info.get("default_branch") or "main"
 
@@ -349,11 +343,15 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
     return dashboard
 
 
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 # Attività autore 360
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
 
 def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
+    """
+    Statistiche dettagliate per un autore su un branch.
+    Usa solo i commit specifici di quel branch.
+    """
     dashboard = collect_repo_dashboard_data(owner, repo, branch)
     commits_all = dashboard["commits"]
 
@@ -445,437 +443,11 @@ def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
     return summary, enriched_commits
 
 
-# -------------------------------------------------------------------
-# Template HTML - indice
-# -------------------------------------------------------------------
+# ------------------------------------------------------------
+# Template HTML per il report autore (download)
+# ------------------------------------------------------------
 
-MAIN_TEMPLATE = Template(r"""
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <title>Cruscotto Progetto GitHub</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            margin: 0;
-            background: #050509;
-            color: #e5e7eb;
-        }
-        header {
-            padding: 10px 24px;
-            background: linear-gradient(90deg, #020617, #7f1d1d);
-            color: #f9fafb;
-            border-bottom: 1px solid #111827;
-        }
-        .header-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .logo-main {
-            height: 36px;
-            border-radius: 4px;
-        }
-        .header-title h1 {
-            margin: 0;
-            font-size: 1.2rem;
-        }
-        .header-title p {
-            margin: 2px 0 0 0;
-            font-size: 0.85rem;
-            color: #e5e7eb;
-        }
-        .container {
-            padding: 24px;
-            max-width: 1280px;
-            margin: 0 auto;
-        }
-        h1, h2, h3 {
-            margin-top: 0;
-        }
-        h2 {
-            font-size: 1.1rem;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        .card {
-            background: radial-gradient(circle at top left, #111827, #020617);
-            border-radius: 10px;
-            padding: 12px 14px;
-            border: 1px solid #1f2937;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-        }
-        .card-title {
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            color: #9ca3af;
-            margin-bottom: 4px;
-            letter-spacing: 0.04em;
-        }
-        .card-value {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #f9fafb;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
-        }
-        th, td {
-            padding: 6px 8px;
-            border-bottom: 1px solid #111827;
-            text-align: left;
-        }
-        th {
-            background: #020617;
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            font-weight: 500;
-            color: #f97373;
-        }
-        .section {
-            margin-bottom: 32px;
-        }
-        .pill {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-        }
-        .pill-open {
-            background: rgba(34, 197, 94, 0.15);
-            color: #22c55e;
-        }
-        .pill-closed {
-            background: rgba(248, 113, 113, 0.15);
-            color: #f87171;
-        }
-        a {
-            color: #f97373;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        canvas {
-            background: #020617;
-            border-radius: 10px;
-            padding: 8px;
-            border: 1px solid #1f2937;
-        }
-        .error {
-            background: rgba(248, 113, 113, 0.08);
-            border: 1px solid #f97373;
-            color: #fecaca;
-            padding: 8px 10px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            font-size: 0.9rem;
-        }
-        .muted {
-            color: #9ca3af;
-        }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-<header>
-    <div class="header-bar">
-        <div class="header-left">
-            {% if inline_logo_data %}
-                <img src="data:image/png;base64,{{ inline_logo_data }}" alt="RPM Logo" class="logo-main">
-            {% endif %}
-            <div class="header-title">
-                <h1>Cruscotto Progetto GitHub</h1>
-                <p>Vista di gestione rapida per qualsiasi repository a cui hai accesso</p>
-            </div>
-        </div>
-    </div>
-</header>
-<div class="container">
-
-    {% if error %}
-        <div class="error">{{ error }}</div>
-    {% endif %}
-
-    {% if data %}
-        <div class="section">
-            <h2>Panoramica</h2>
-            <p>
-                <a href="{{ data.repo_url }}" target="_blank">
-                    {{ data.overview.full_name }}
-                </a>
-                {% if data.overview.description %}
-                    <br><span class="muted">{{ data.overview.description }}</span>
-                {% endif %}
-            </p>
-            <div class="grid">
-                <div class="card">
-                    <div class="card-title">Branch attivo (cruscotto)</div>
-                    <div class="card-value">{{ data.branch }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Branch predefinito (GitHub)</div>
-                    <div class="card-value">{{ data.overview.default_branch }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Linguaggio</div>
-                    <div class="card-value">{{ data.overview.language or "Non definito" }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Stelle</div>
-                    <div class="card-value">{{ data.overview.stars }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Fork</div>
-                    <div class="card-value">{{ data.overview.forks }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Osservatori</div>
-                    <div class="card-value">{{ data.overview.watchers }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Issue aperte (totale)</div>
-                    <div class="card-value">{{ data.overview.open_issues }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Issue (aperte/chiuse)</div>
-                    <div class="card-value">{{ data.open_issues_count }} / {{ data.closed_issues_count }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Pull request (aperte/chiuse)</div>
-                    <div class="card-value">{{ data.open_pr_count }} / {{ data.closed_pr_count }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Creato il</div>
-                    <div class="card-value">{{ data.overview.created_at }}</div>
-                </div>
-                <div class="card">
-                    <div class="card-title">Ultimo push</div>
-                    <div class="card-value">{{ data.overview.pushed_at }}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>Riepilogo autori sul branch "{{ data.branch }}"</h2>
-            {% if data.author_overview %}
-                <div style="max-height: 260px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Autore</th>
-                                <th>Commit</th>
-                                <th>Primo commit</th>
-                                <th>Ultimo commit</th>
-                                <th>Giorni attivi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        {% for a in data.author_overview %}
-                            <tr>
-                                <td>{{ a.display }}</td>
-                                <td>{{ a.commits }}</td>
-                                <td>{{ a.first_date_display }}</td>
-                                <td>{{ a.last_date_display }}</td>
-                                <td>{{ a.days_active }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="muted">Nessuna attività autori trovata per questo branch.</p>
-            {% endif %}
-        </div>
-
-        <div class="section">
-            <h2>Attività commit (livello repository, ultime settimane)</h2>
-            {% if data.commit_weeks %}
-                <canvas id="commitChart" height="100"></canvas>
-            {% else %}
-                <p class="muted">Nessun dato di attività commit disponibile. GitHub potrebbe essere ancora in elaborazione.</p>
-            {% endif %}
-        </div>
-
-        <div class="section">
-            <h2>Commit recenti sul branch "{{ data.branch }}" (solo commit specifici del branch)</h2>
-            {% if data.commits %}
-                <div style="max-height: 260px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>SHA</th>
-                                <th>Messaggio</th>
-                                <th>Autore</th>
-                                <th>Data</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        {% for c in data.commits %}
-                            <tr>
-                                <td><span class="muted">{{ c.sha }}</span></td>
-                                <td>{{ c.message }}</td>
-                                <td>{{ c.author }}</td>
-                                <td>{{ c.date_display }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="muted">Nessun commit specifico trovato per questo branch.</p>
-            {% endif %}
-        </div>
-
-        <div class="section">
-            <h2>Issue</h2>
-            {% if data.issues %}
-                <div style="max-height: 260px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Titolo</th>
-                                <th>Stato</th>
-                                <th>Assegnato a</th>
-                                <th>Aggiornato</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        {% for i in data.issues %}
-                            <tr>
-                                <td><a href="{{ i.url }}" target="_blank">#{{ i.number }}</a></td>
-                                <td>{{ i.title }}</td>
-                                <td>
-                                    {% if i.state == "open" %}
-                                        <span class="pill pill-open">aperta</span>
-                                    {% else %}
-                                        <span class="pill pill-closed">{{ i.state }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ i.assignee or "-" }}</td>
-                                <td>{{ i.updated_display }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="muted">Nessuna issue trovata.</p>
-            {% endif %}
-        </div>
-
-        <div class="section">
-            <h2>Pull request</h2>
-            {% if data.pulls %}
-                <div style="max-height: 260px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Titolo</th>
-                                <th>Stato</th>
-                                <th>Autore</th>
-                                <th>Aggiornato</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        {% for p in data.pulls %}
-                            <tr>
-                                <td><a href="{{ p.url }}" target="_blank">#{{ p.number }}</a></td>
-                                <td>{{ p.title }}</td>
-                                <td>
-                                    {% if p.state == "open" %}
-                                        <span class="pill pill-open">aperta</span>
-                                    {% else %}
-                                        <span class="pill pill-closed">{{ p.state }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ p.author or "-" }}</td>
-                                <td>{{ p.updated_display }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <p class="muted">Nessuna pull request trovata.</p>
-            {% endif %}
-        </div>
-
-        <div class="section">
-            <h2>Principali contributor (livello repository)</h2>
-            {% if data.contributors %}
-                <div class="grid">
-                    {% for c in data.contributors %}
-                        <div class="card">
-                            <div class="card-title">Contributor</div>
-                            <div class="card-value">
-                                <a href="{{ c.url }}" target="_blank">{{ c.login }}</a>
-                            </div>
-                            <div class="muted">{{ c.commits }} commit</div>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p class="muted">Nessun dato contributor disponibile.</p>
-            {% endif %}
-        </div>
-    {% endif %}
-</div>
-
-{% if data and data.commit_weeks %}
-<script>
-    const labels = {{ data.commit_weeks | map(attribute="label") | list | tojson }};
-    const values = {{ data.commit_weeks | map(attribute="total") | list | tojson }};
-
-    const ctx = document.getElementById('commitChart').getContext('2d');
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Commit per settimana',
-                data: values,
-                tension: 0.3,
-                borderColor: 'rgba(248,113,113,1)',
-                backgroundColor: 'rgba(248,113,113,0.2)',
-            }]
-        },
-        options: {
-            scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true }
-            }
-        }
-    });
-</script>
-{% endif %}
-</body>
-</html>
-""")
-
-
-# -------------------------------------------------------------------
-# Template HTML - vista autore + report HTML
-# -------------------------------------------------------------------
-
-AUTHOR_TEMPLATE = Template(r"""
+AUTHOR_REPORT_TEMPLATE = Template(r"""
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -898,16 +470,11 @@ AUTHOR_TEMPLATE = Template(r"""
         .header-bar {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-        }
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
         }
         .logo-main {
             height: 36px;
             border-radius: 4px;
+            margin-right: 12px;
         }
         .header-title h1 {
             margin: 0;
@@ -920,11 +487,8 @@ AUTHOR_TEMPLATE = Template(r"""
         }
         .container {
             padding: 24px;
-            max-width: 1280px;
+            max-width: 1080px;
             margin: 0 auto;
-        }
-        h1, h2, h3 {
-            margin-top: 0;
         }
         .grid {
             display: grid;
@@ -963,9 +527,6 @@ AUTHOR_TEMPLATE = Template(r"""
         }
         th {
             background: #020617;
-            position: sticky;
-            top: 0;
-            z-index: 1;
             font-weight: 500;
             color: #f97373;
         }
@@ -981,14 +542,12 @@ AUTHOR_TEMPLATE = Template(r"""
 <body>
 <header>
     <div class="header-bar">
-        <div class="header-left">
-            {% if inline_logo_data %}
-                <img src="data:image/png;base64,{{ inline_logo_data }}" alt="RPM Logo" class="logo-main">
-            {% endif %}
-            <div class="header-title">
-                <h1>Attività autore · {{ summary.author_display }}</h1>
-                <p>{{ summary.owner }}/{{ summary.repo }} sul branch "{{ summary.branch }}"</p>
-            </div>
+        {% if inline_logo_data %}
+            <img src="data:image/png;base64,{{ inline_logo_data }}" alt="RPM Logo" class="logo-main">
+        {% endif %}
+        <div class="header-title">
+            <h1>Attività autore · {{ summary.author_display }}</h1>
+            <p>{{ summary.owner }}/{{ summary.repo }} sul branch "{{ summary.branch }}"</p>
         </div>
     </div>
 </header>
@@ -1036,24 +595,6 @@ AUTHOR_TEMPLATE = Template(r"""
     </div>
 
     <div class="section">
-        <h2>Attività nel tempo</h2>
-        {% if summary.activity_by_day %}
-            <canvas id="activityByDayChart" height="80"></canvas>
-        {% else %}
-            <p class="muted">Nessun commit datato da mostrare.</p>
-        {% endif %}
-    </div>
-
-    <div class="section">
-        <h2>Variazioni per commit (ultimi {{ commits|length }} analizzati)</h2>
-        {% if commits %}
-            <canvas id="changesPerCommitChart" height="80"></canvas>
-        {% else %}
-            <p class="muted">Nessun dato di diff disponibile.</p>
-        {% endif %}
-    </div>
-
-    <div class="section">
         <h2>Dettaglio commit</h2>
         {% if commits %}
             <div style="max-height: 320px; overflow-y: auto;">
@@ -1097,7 +638,10 @@ AUTHOR_TEMPLATE = Template(r"""
 {% if summary.activity_by_day %}
     const adLabels = {{ summary.activity_by_day | map(attribute="label") | list | tojson }};
     const adValues = {{ summary.activity_by_day | map(attribute="total") | list | tojson }};
-    const ctxAD = document.getElementById('activityByDayChart').getContext('2d');
+    const canvas1 = document.createElement('canvas');
+    canvas1.height = 80;
+    document.querySelector('.container').insertBefore(canvas1, document.querySelector('.section:nth-of-type(2)'));
+    const ctxAD = canvas1.getContext('2d');
     new Chart(ctxAD, {
         type: 'line',
         data: {
@@ -1118,49 +662,24 @@ AUTHOR_TEMPLATE = Template(r"""
         }
     });
 {% endif %}
-
-{% if commits %}
-    const cLabels = {{ commits | map(attribute="date_display") | list | tojson }};
-    const cAdds = {{ commits | map(attribute="additions") | list | tojson }};
-    const cDels = {{ commits | map(attribute="deletions") | list | tojson }};
-
-    const ctxChanges = document.getElementById('changesPerCommitChart').getContext('2d');
-    new Chart(ctxChanges, {
-        type: 'bar',
-        data: {
-            labels: cLabels,
-            datasets: [
-                {
-                    label: 'Righe aggiunte',
-                    data: cAdds,
-                    stack: 'stack1',
-                    backgroundColor: 'rgba(34,197,94,0.7)',
-                },
-                {
-                    label: 'Righe rimosse',
-                    data: cDels,
-                    stack: 'stack1',
-                    backgroundColor: 'rgba(248,113,113,0.7)',
-                }
-            ]
-        },
-        options: {
-            scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true }
-            }
-        }
-    });
-{% endif %}
 </script>
 </body>
 </html>
 """)
 
 
-# -------------------------------------------------------------------
-# Streamlit UI
-# -------------------------------------------------------------------
+def generate_author_report_html(summary, commits) -> str:
+    inline_logo = get_inline_logo(RPMSOFT_PATH)
+    return AUTHOR_REPORT_TEMPLATE.render(
+        summary=summary,
+        commits=commits,
+        inline_logo_data=inline_logo,
+    )
+
+
+# ------------------------------------------------------------
+# Streamlit UI a schede
+# ------------------------------------------------------------
 
 def main():
     st.set_page_config(
@@ -1169,101 +688,287 @@ def main():
         layout="wide",
     )
 
-    inline_soft_logo = get_inline_logo(RPMSOFT_PATH)
-
+    # Tema scuro e accenti rossi
     st.markdown(
         """
         <style>
         .stApp {
             background-color: #050509;
         }
+        .block-container {
+            padding-top: 1rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+    # Header
     col_logo, col_title = st.columns([1, 5])
     with col_logo:
         if os.path.exists(RPMSOFT_PATH):
             st.image(RPMSOFT_PATH, use_column_width=True)
     with col_title:
-        st.markdown("### Cruscotto Progetto GitHub")
-        st.caption("Vista di gestione rapida per qualsiasi repository a cui hai accesso")
+        st.markdown(
+            "<h3 style='color:#f9fafb;margin-bottom:0;'>Cruscotto Progetto GitHub</h3>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<p style='color:#9ca3af;margin-top:4px;'>Vista di gestione rapida per qualsiasi repository a cui hai accesso</p>",
+            unsafe_allow_html=True,
+        )
 
     st.write("")
 
+    # Input URL repository
     default_url = "https://github.com/gamdevelop2024/GAM-Anonymization/tree/dev"
     repo_url = st.text_input(
         "URL del repository GitHub",
         value=default_url,
         help="Accetta sia https://github.com/owner/repo sia https://github.com/owner/repo/tree/dev",
     )
-
-    load_button = st.button("Carica cruscotto")
+    load_btn = st.button("Carica dati")
 
     dashboard_data = None
-    error = None
-
-    if load_button and repo_url.strip():
+    if load_btn and repo_url.strip():
         try:
             owner, repo, branch = parse_github_url(repo_url)
             dashboard_data = collect_repo_dashboard_data(owner, repo, branch)
         except Exception as exc:
-            error = str(exc)
+            st.error(f"Errore: {exc}")
 
-    if dashboard_data or error:
-        html_main = MAIN_TEMPLATE.render(
-            data=dashboard_data,
-            error=error,
-            inline_logo_data=inline_soft_logo,
+    if not dashboard_data:
+        st.info("Inserisci una URL valida e premi 'Carica dati' per vedere il cruscotto.")
+        return
+
+    overview = dashboard_data["overview"]
+
+    # Schede principali
+    tab_pan, tab_issues, tab_contrib, tab_author = st.tabs(
+        ["Panoramica", "Issue e Pull request", "Contributor", "Autori 360"]
+    )
+
+    # --------------------------------------------------------
+    # TAB 1 - Panoramica
+    # --------------------------------------------------------
+    with tab_pan:
+        st.markdown("#### Panoramica repository")
+
+        top1, top2, top3, top4 = st.columns(4)
+        top1.metric("Repository", overview["full_name"])
+        top2.metric("Branch attivo (cruscotto)", dashboard_data["branch"])
+        top3.metric("Branch predefinito (GitHub)", overview["default_branch"])
+        top4.metric("Linguaggio", overview["language"] or "Non definito")
+
+        mid1, mid2, mid3, mid4, mid5 = st.columns(5)
+        mid1.metric("Stelle", overview["stars"])
+        mid2.metric("Fork", overview["forks"])
+        mid3.metric("Osservatori", overview["watchers"])
+        mid4.metric("Issue totali aperte", overview["open_issues"])
+        mid5.metric(
+            "Issue aperte/chiuse",
+            f"{dashboard_data['open_issues_count']} / {dashboard_data['closed_issues_count']}",
         )
-        st_html(html_main, height=900, scrolling=True)
 
-    st.write("---")
-    st.subheader("Vista 360 autore")
+        st.caption(
+            f"Creato il {overview['created_at']} · Ultimo push {overview['pushed_at']} · "
+            f"[Apri su GitHub]({dashboard_data['repo_url']})"
+        )
 
-    if dashboard_data and dashboard_data.get("author_overview"):
+        st.markdown("##### Attività commit (ultime settimane, livello repository)")
+        if dashboard_data["commit_weeks"]:
+            df_weeks = pd.DataFrame(dashboard_data["commit_weeks"])
+            df_weeks = df_weeks.rename(columns={"label": "Settimana", "total": "Commit"})
+            df_weeks = df_weeks.set_index("Settimana")
+            st.line_chart(df_weeks)
+        else:
+            st.caption("Nessun dato di attività commit disponibile.")
+
+        st.markdown("##### Commit recenti sul branch (solo commit specifici del branch)")
+        if dashboard_data["commits"]:
+            df_commits = pd.DataFrame(dashboard_data["commits"]).rename(
+                columns={
+                    "sha": "SHA",
+                    "message": "Messaggio",
+                    "author": "Autore",
+                    "date_display": "Data",
+                }
+            )[["SHA", "Messaggio", "Autore", "Data"]]
+            st.dataframe(df_commits, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nessun commit specifico trovato per questo branch.")
+
+        st.markdown("##### Riepilogo autori sul branch")
+        if dashboard_data["author_overview"]:
+            df_auth = pd.DataFrame(dashboard_data["author_overview"]).rename(
+                columns={
+                    "display": "Autore",
+                    "commits": "Commit",
+                    "first_date_display": "Primo commit",
+                    "last_date_display": "Ultimo commit",
+                    "days_active": "Giorni attivi",
+                }
+            )[["Autore", "Commit", "Primo commit", "Ultimo commit", "Giorni attivi"]]
+            st.dataframe(df_auth, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nessuna attività autori trovata per questo branch.")
+
+    # --------------------------------------------------------
+    # TAB 2 - Issue e PR
+    # --------------------------------------------------------
+    with tab_issues:
+        left, right = st.columns(2)
+
+        with left:
+            st.markdown("#### Issue")
+            if dashboard_data["issues"]:
+                df_issues = pd.DataFrame(dashboard_data["issues"]).rename(
+                    columns={
+                        "number": "Numero",
+                        "title": "Titolo",
+                        "state": "Stato",
+                        "assignee": "Assegnato a",
+                        "updated_display": "Aggiornato",
+                        "url": "URL",
+                    }
+                )[["Numero", "Titolo", "Stato", "Assegnato a", "Aggiornato", "URL"]]
+                st.dataframe(df_issues, use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nessuna issue trovata.")
+
+        with right:
+            st.markdown("#### Pull request")
+            if dashboard_data["pulls"]:
+                df_pr = pd.DataFrame(dashboard_data["pulls"]).rename(
+                    columns={
+                        "number": "Numero",
+                        "title": "Titolo",
+                        "state": "Stato",
+                        "author": "Autore",
+                        "updated_display": "Aggiornato",
+                        "url": "URL",
+                    }
+                )[["Numero", "Titolo", "Stato", "Autore", "Aggiornato", "URL"]]
+                st.dataframe(df_pr, use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nessuna pull request trovata.")
+
+    # --------------------------------------------------------
+    # TAB 3 - Contributor
+    # --------------------------------------------------------
+    with tab_contrib:
+        st.markdown("#### Principali contributor (livello repository)")
+        if dashboard_data["contributors"]:
+            df_contrib = pd.DataFrame(dashboard_data["contributors"]).rename(
+                columns={
+                    "login": "Login",
+                    "commits": "Commit",
+                    "avatar": "Avatar",
+                    "url": "URL",
+                }
+            )[["Login", "Commit", "Avatar", "URL"]]
+            st.dataframe(df_contrib, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nessun contributor trovato.")
+
+    # --------------------------------------------------------
+    # TAB 4 - Autori 360
+    # --------------------------------------------------------
+    with tab_author:
+        st.markdown("#### Vista 360 autore sul branch selezionato")
+
         authors = dashboard_data["author_overview"]
-        options = {a["display"]: a["id"] for a in authors}
-        selected_display = st.selectbox("Seleziona autore", list(options.keys()))
-        author_id = options[selected_display]
+        if not authors:
+            st.info("Nessun autore disponibile per il branch selezionato.")
+        else:
+            options = {a["display"]: a["id"] for a in authors}
+            selected_display = st.selectbox("Seleziona autore", list(options.keys()))
+            author_id = options[selected_display]
 
-        if st.button("Carica vista 360 per autore"):
-            try:
-                summary, commits = compute_author_activity(
-                    dashboard_data["owner"],
-                    dashboard_data["repo"],
-                    dashboard_data["branch"],
-                    author_id,
+            if st.button("Carica vista 360 per autore"):
+                try:
+                    summary, commits = compute_author_activity(
+                        dashboard_data["owner"],
+                        dashboard_data["repo"],
+                        dashboard_data["branch"],
+                        author_id,
+                    )
+                except Exception as exc:
+                    st.error(f"Errore vista autore: {exc}")
+                    return
+
+                st.markdown(f"##### Panoramica 360 · {summary['author_display']}")
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Commit totali", summary["total_commits"])
+                c2.metric("Righe aggiunte", summary["total_additions"])
+                c3.metric("Righe rimosse", summary["total_deletions"])
+                c4.metric("Righe nette", summary["net_lines"])
+
+                c5, c6, c7 = st.columns(3)
+                c5.metric("Primo commit", summary["first_date_display"])
+                c6.metric("Ultimo commit", summary["last_date_display"])
+                c7.metric("Giorni attivi", summary["days_active"])
+
+                st.markdown("##### Attività nel tempo")
+                if summary["activity_by_day"]:
+                    df_ad = pd.DataFrame(summary["activity_by_day"]).rename(
+                        columns={"label": "Data", "total": "Commit"}
+                    )
+                    df_ad = df_ad.set_index("Data")
+                    st.line_chart(df_ad)
+                else:
+                    st.caption("Nessun commit datato da mostrare.")
+
+                st.markdown("##### Variazioni per commit (ultimi 50)")
+                if commits:
+                    df_changes = pd.DataFrame(commits)
+                    df_changes_chart = df_changes[["date_display", "additions", "deletions"]].rename(
+                        columns={
+                            "date_display": "Data",
+                            "additions": "Righe aggiunte",
+                            "deletions": "Righe rimosse",
+                        }
+                    )
+                    df_changes_chart = df_changes_chart.set_index("Data")
+                    st.bar_chart(df_changes_chart)
+                else:
+                    st.caption("Nessun dato di diff disponibile.")
+
+                st.markdown("##### Dettaglio commit")
+                if commits:
+                    df_c = pd.DataFrame(commits).rename(
+                        columns={
+                            "date_display": "Data",
+                            "sha": "SHA",
+                            "message": "Messaggio",
+                            "additions": "Righe +",
+                            "deletions": "Righe -",
+                            "files_changed": "File modificati",
+                            "file_names": "Nomi file",
+                        }
+                    )[
+                        [
+                            "Data",
+                            "SHA",
+                            "Messaggio",
+                            "Righe +",
+                            "Righe -",
+                            "File modificati",
+                            "Nomi file",
+                        ]
+                    ]
+                    st.dataframe(df_c, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("Nessun commit trovato per questo autore.")
+
+                # Report HTML scaricabile
+                html_report = generate_author_report_html(summary, commits)
+                st.download_button(
+                    label="Scarica report HTML autore",
+                    data=html_report,
+                    file_name=f"{summary['repo']}_{summary['branch']}_{summary['author_id']}_attivita.html",
+                    mime="text/html",
                 )
-            except Exception as exc:
-                st.error(f"Errore vista autore: {exc}")
-                return
-
-            inline_logo_author = inline_soft_logo
-
-            html_author_view = AUTHOR_TEMPLATE.render(
-                summary=summary,
-                commits=commits,
-                inline_logo_data=inline_logo_author,
-            )
-            st_html(html_author_view, height=900, scrolling=True)
-
-            html_author_download = AUTHOR_TEMPLATE.render(
-                summary=summary,
-                commits=commits,
-                inline_logo_data=inline_logo_author,
-            )
-            st.download_button(
-                label="Scarica report HTML autore",
-                data=html_author_download,
-                file_name=f"{summary['repo']}_{summary['branch']}_{summary['author_id']}_attivita.html",
-                mime="text/html",
-            )
-    elif dashboard_data:
-        st.info("Nessun autore disponibile per il branch selezionato.")
-    else:
-        st.caption("Carica prima un repository per vedere la vista autore.")
 
 
 if __name__ == "__main__":
