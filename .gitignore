@@ -1,0 +1,54 @@
+# ------------------------------
+# Python
+# ------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.rpm/
+rpm/
+.venv/
+
+# Local config and secrets
+.env
+*.env
+env.local
+.env.local
+.github_api.txt
+auth/
+*.pem
+*.key
+*.crt
+*.pfx
+
+# Streamlit local secrets
+.streamlit/secrets.toml
+
+# ------------------------------
+# Node / npm
+# ------------------------------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ------------------------------
+# OS and editor junk
+# ------------------------------
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ------------------------------
+# Ignore specific files
+# ------------------------------
+github_api.txt
+auth/gamrpm-dashboard.2025-12-05.private-key.pem
+package-lock.json
+package.json
