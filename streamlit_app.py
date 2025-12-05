@@ -473,7 +473,7 @@ AUTHOR_REPORT_TEMPLATE = Template(r"""
             align-items: center;
         }
         .logo-main {
-            height: 36px;
+            height: 32px;
             border-radius: 4px;
             margin-right: 12px;
         }
@@ -658,7 +658,7 @@ def main():
         layout="wide",
     )
 
-    # Stile scuro semplice
+    # Stile scuro + contenuto centrato / allineato
     st.markdown(
         """
         <style>
@@ -667,30 +667,34 @@ def main():
         }
         .block-container {
             padding-top: 1rem;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        table {
+            color: #e5e7eb !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Header
-    col_logo, col_title = st.columns([1, 5])
-    with col_logo:
-        if os.path.exists(RPMSOFT_PATH):
-            st.image(RPMSOFT_PATH, use_column_width=True)
-    with col_title:
-        st.markdown(
-            "<h3 style='color:#f9fafb;margin-bottom:0;'>Cruscotto Progetto GitHub</h3>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<p style='color:#9ca3af;margin-top:4px;'>Vista di gestione rapida per qualsiasi repository a cui hai accesso</p>",
-            unsafe_allow_html=True,
-        )
+    # Header allineato (logo + titolo)
+    inline_logo = get_inline_logo(RPMSOFT_PATH)
+    header_html = f"""
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        {'<img src="data:image/png;base64,' + inline_logo + '" style="height:32px;border-radius:4px;" alt="RPM Logo">' if inline_logo else ''}
+        <div>
+            <div style="font-size:1.3rem;font-weight:600;color:#f9fafb;">Cruscotto Progetto GitHub</div>
+            <div style="font-size:0.85rem;color:#9ca3af;margin-top:2px;">
+                Vista di gestione rapida per qualsiasi repository a cui hai accesso
+            </div>
+        </div>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
 
-    st.write("")
-
-    # Stato globale per tenere i dati tra i click
+    # Stato globale
     if "dashboard_data" not in st.session_state:
         st.session_state.dashboard_data = None
     if "last_error" not in st.session_state:
@@ -762,7 +766,7 @@ def main():
             df_weeks = pd.DataFrame(dashboard_data["commit_weeks"])
             df_weeks = df_weeks.rename(columns={"label": "Settimana", "total": "Commit"})
             df_weeks = df_weeks.set_index("Settimana")
-            st.line_chart(df_weeks)
+            st.line_chart(df_weeks, use_container_width=True)
         else:
             st.caption("Nessun dato di attività commit disponibile (GitHub potrebbe essere ancora in elaborazione).")
 
@@ -897,7 +901,7 @@ def main():
                         columns={"label": "Data", "total": "Commit"}
                     )
                     df_ad = df_ad.set_index("Data")
-                    st.line_chart(df_ad)
+                    st.line_chart(df_ad, use_container_width=True)
                 else:
                     st.caption("Nessun commit datato da mostrare.")
 
@@ -912,7 +916,7 @@ def main():
                         }
                     )
                     df_changes_chart = df_changes_chart.set_index("Data")
-                    st.bar_chart(df_changes_chart)
+                    st.bar_chart(df_changes_chart, use_container_width=True)
                 else:
                     st.caption("Nessun dato di diff disponibile.")
 
