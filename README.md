@@ -1,7 +1,7 @@
 # Github PM
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/AlviRownok/Github-PM/main/assets/rpmlogo.png" width="110">
+  <img src="https://raw.githubusercontent.com/AlviRownok/Github-PM/main/assets/rpmsoft.png" width="110">
 </p>
 
 <p align="center">
