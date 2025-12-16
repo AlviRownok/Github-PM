@@ -637,7 +637,7 @@ def extract_inputs_map(df: pd.DataFrame) -> dict:
     return out
 
 
-def make_gantt_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def make_gantt_dataframe(df: pd.DataFrame, gap_days: int = 2) -> pd.DataFrame:
     rows = []
 
     for _, r in df.iterrows():
@@ -681,7 +681,7 @@ def make_gantt_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             if i < len(g) - 1:
                 end = g.loc[i + 1, "Start"]
             else:
-                end = start + dt.timedelta(days=1)  # fallback for last commit
+                end = start + dt.timedelta(days=gap_days)  # fallback for last commit
 
             # ensure minimum visible duration
             if end <= start:
