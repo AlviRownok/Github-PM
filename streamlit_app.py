@@ -637,8 +637,18 @@ def extract_inputs_map(df: pd.DataFrame) -> dict:
     return out
 
 
-def make_gantt_dataframe(df: pd.DataFrame, gap_days: int = 2) -> pd.DataFrame:
+def make_gantt_dataframe(
+    df: pd.DataFrame,
+    project_start: dt.date,
+    project_end: dt.date,
+    extension_dates: list,
+    gap_days: int = 2,
+) -> pd.DataFrame:
     rows = []
+
+    window_start = dt.datetime.combine(project_start, dt.time(0, 0))
+    right_edge_date = max(extension_dates) if extension_dates else project_end
+    window_end = dt.datetime.combine(right_edge_date, dt.time(23, 59))
 
     for _, r in df.iterrows():
         autore = (r.get("Autore") or "").strip()
@@ -681,17 +691,32 @@ def make_gantt_dataframe(df: pd.DataFrame, gap_days: int = 2) -> pd.DataFrame:
             if i < len(g) - 1:
                 end = g.loc[i + 1, "Start"]
             else:
-                end = start + dt.timedelta(days=gap_days)  # fallback for last commit
+                # Stretch last task to the end of project window (including extensions)
+                end = window_end
 
-            # ensure minimum visible duration
+            # If there is no next commit and you want a minimum duration, keep this fallback
             if end <= start:
-                end = start + dt.timedelta(hours=4)
+                end = start + dt.timedelta(days=gap_days)
+
+            # Clip bars to the project window
+            start_clipped = max(start, window_start)
+            end_clipped = min(end, window_end)
+
+            # Drop tasks that do not intersect the project window
+            if end_clipped <= window_start or start_clipped >= window_end:
+                continue
+
+            # Ensure minimum visible duration after clipping
+            if end_clipped <= start_clipped:
+                end_clipped = start_clipped + dt.timedelta(hours=4)
+                if end_clipped > window_end:
+                    end_clipped = window_end
 
             tasks.append(
                 {
                     "Autore": autore,
-                    "Start": start,
-                    "End": end,
+                    "Start": start_clipped,
+                    "End": end_clipped,
                     "Tag": g.loc[i, "Tag"],
                     "SHA": g.loc[i, "SHA"],
                     "Descrizione": g.loc[i, "Descrizione"],
@@ -734,7 +759,12 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
     fig.update_layout(height=180 + 60 * tasks_df["Autore"].nunique())    
 
     x0 = dt.datetime.combine(project_start, dt.time(0, 0))
-    x1 = dt.datetime.combine(max(extension_dates) if extension_dates else project_end, dt.time(23, 59))
+
+    right_edge_date = max(extension_dates) if extension_dates else project_end
+    x1_candidate = dt.datetime.combine(right_edge_date, dt.time(23, 59))
+
+    max_task_end = tasks_df["End"].max()
+    x1 = max(x1_candidate, max_task_end)
 
     fig.update_xaxes(range=[x0, x1])
 
@@ -1162,8 +1192,13 @@ def main():
 
         st.markdown("##### Gantt chart")
         if st.button("Genera Gantt chart", key=f"pm_gantt_{repo_key}"):
-            tasks_df = make_gantt_dataframe(edited, gap_days=2)
-            #tasks_df = make_gantt_dataframe(edited, gap_days=1)
+            tasks_df = make_gantt_dataframe(
+                edited,
+                project_start=project_start,
+                project_end=project_end,
+                extension_dates=st.session_state.pm_extensions[repo_key],
+                gap_days=2,
+            )
             render_gantt_chart(
                 tasks_df=tasks_df,
                 project_start=project_start,
