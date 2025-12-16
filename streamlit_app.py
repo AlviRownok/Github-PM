@@ -347,7 +347,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
             total = item.get("total", 0)
             if ts is None:
                 continue
-            week_start = dt.datetime.utcfromtimestamp(ts)
+            week_start = dt.datetime.fromtimestamp(ts, dt.UTC)
             label = week_start.strftime("%Y-%m-%d")
             commit_weeks.append({"label": label, "total": total})
 
@@ -749,7 +749,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_d
         x_end="End",
         y="Task",
         color="Tag",
-        hover_data=["Autore", "Descrizione", "SHA"],
+        hover_data=["Autore", "Descrizione"],
     )
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
