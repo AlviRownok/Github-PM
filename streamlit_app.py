@@ -637,95 +637,64 @@ def extract_inputs_map(df: pd.DataFrame) -> dict:
     return out
 
 
-def make_gantt_dataframe(df: pd.DataFrame, gap_days: int = 2) -> pd.DataFrame:
-    """
-    Gantt a blocchi giornalieri.
-    Per ogni Autore e Tag crea segmenti continui per giorni consecutivi.
-    Spezza un segmento se il gap tra due giorni di attività supera gap_days.
-    """
+def make_gantt_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
+
     for _, r in df.iterrows():
-        tag = (r.get("Activity Tag") or "").strip()
         autore = (r.get("Autore") or "").strip()
-        if not tag or not autore:
+        tag = (r.get("Activity Tag") or "").strip()
+        sha = (r.get("SHA") or "").strip()
+        desc = (r.get("Activity Description") or "").strip()
+        dt_str = (r.get("Data e ora commit") or "").strip()
+
+        if not autore or not dt_str:
             continue
 
-        dt_str = (r.get("Data e ora commit") or "").strip()
         try:
             ts = dt.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
         except Exception:
             continue
 
-        day = ts.date()
         rows.append(
             {
                 "Autore": autore,
-                "Tag": tag,
-                "Day": day,
-                "SHA": (r.get("SHA") or "").strip(),
-                "Descrizione": (r.get("Activity Description") or "").strip(),
+                "Tag": tag or "Uncategorized",
+                "SHA": sha,
+                "Descrizione": desc,
+                "Start": ts,
             }
         )
 
     if not rows:
-        return pd.DataFrame(columns=["Autore", "Start", "End", "Tag", "SHA", "Descrizione"])
+        return pd.DataFrame(columns=["Autore", "Tag", "Start", "End", "SHA", "Descrizione"])
 
-    df0 = pd.DataFrame(rows)
-
-    agg = (
-        df0.groupby(["Autore", "Tag", "Day"], as_index=False)
-        .agg(
-            SHA=("SHA", lambda s: ", ".join([x for x in s if x])[:2000]),
-            Descrizione=("Descrizione", lambda s: " | ".join([x for x in s if x])[:2000]),
-        )
-        .sort_values(["Autore", "Tag", "Day"], ascending=True)
-        .reset_index(drop=True)
-    )
+    df0 = pd.DataFrame(rows).sort_values(["Autore", "Start"])
 
     tasks = []
-    for (autore, tag), g in agg.groupby(["Autore", "Tag"], sort=False):
-        days = g["Day"].tolist()
 
-        seg_start = None
-        seg_end = None
-        seg_sha = []
-        seg_desc = []
+    for autore, g in df0.groupby("Autore", sort=False):
+        g = g.reset_index(drop=True)
 
-        for i, d in enumerate(days):
-            if seg_start is None:
-                seg_start = d
-                seg_end = d
+        for i in range(len(g)):
+            start = g.loc[i, "Start"]
+
+            if i < len(g) - 1:
+                end = g.loc[i + 1, "Start"]
             else:
-                if (d - seg_end).days > gap_days:
-                    tasks.append(
-                        {
-                            "Autore": autore,
-                            "Tag": tag,
-                            "Start": dt.datetime.combine(seg_start, dt.time(0, 0)),
-                            "End": dt.datetime.combine(seg_end + dt.timedelta(days=1), dt.time(0, 0)),
-                            "SHA": " | ".join(seg_sha)[:2000],
-                            "Descrizione": " | ".join(seg_desc)[:2000],
-                        }
-                    )
-                    seg_start = d
-                    seg_end = d
-                    seg_sha = []
-                    seg_desc = []
-                else:
-                    seg_end = d
+                end = start + dt.timedelta(days=1)  # fallback for last commit
 
-            seg_sha.append(g.loc[g["Day"] == d, "SHA"].iloc[0] or "")
-            seg_desc.append(g.loc[g["Day"] == d, "Descrizione"].iloc[0] or "")
+            # ensure minimum visible duration
+            if end <= start:
+                end = start + dt.timedelta(hours=4)
 
-        if seg_start is not None:
             tasks.append(
                 {
                     "Autore": autore,
-                    "Tag": tag,
-                    "Start": dt.datetime.combine(seg_start, dt.time(0, 0)),
-                    "End": dt.datetime.combine(seg_end + dt.timedelta(days=1), dt.time(0, 0)),
-                    "SHA": " | ".join([x for x in seg_sha if x])[:2000],
-                    "Descrizione": " | ".join([x for x in seg_desc if x])[:2000],
+                    "Start": start,
+                    "End": end,
+                    "Tag": g.loc[i, "Tag"],
+                    "SHA": g.loc[i, "SHA"],
+                    "Descrizione": g.loc[i, "Descrizione"],
                 }
             )
 
@@ -760,6 +729,9 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
             "End": True,
         },
     )
+
+    fig.update_traces(marker_line_width=0)
+    fig.update_layout(height=180 + 60 * tasks_df["Autore"].nunique())    
 
     x0 = dt.datetime.combine(project_start, dt.time(0, 0))
     x1 = dt.datetime.combine(max(extension_dates) if extension_dates else project_end, dt.time(23, 59))
