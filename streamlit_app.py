@@ -692,7 +692,7 @@ def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
                 continue
 
             if prev_ts is not None and (ts - prev_ts) > gap:
-                label = f"{tag} | {autore}"
+                label = f"{autore} | {tag}"
                 tasks.append(
                     {
                         "Task": label,
@@ -715,7 +715,7 @@ def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
             prev_ts = ts
 
         if seg_start is not None:
-            label = f"{tag} | {autore}"
+            label = f"{autore} | {tag}"
             tasks.append(
                 {
                     "Task": label,
@@ -741,7 +741,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_d
         st.info("Compila almeno qualche riga con Activity Tag e Activity Description, poi genera il Gantt.")
         return
 
-    tasks_df = tasks_df.sort_values("Start", ascending=True)
+    tasks_df = tasks_df.sort_values(["Autore", "Start", "Tag"], ascending=[True, True, True])
 
     fig = px.timeline(
         tasks_df,
