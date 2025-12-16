@@ -684,6 +684,7 @@ def make_gantt_dataframe(
 
     for autore, g in df0.groupby("Autore", sort=False):
         g = g.reset_index(drop=True)
+        last_end_for_author = None
 
         for i in range(len(g)):
             start = g.loc[i, "Start"]
@@ -691,22 +692,19 @@ def make_gantt_dataframe(
             if i < len(g) - 1:
                 end = g.loc[i + 1, "Start"]
             else:
-                # Stretch last task to the end of project window (including extensions)
-                end = window_end
+                end = start + dt.timedelta(days=gap_days)
+                if end > window_end:
+                    end = window_end
 
-            # If there is no next commit and you want a minimum duration, keep this fallback
             if end <= start:
                 end = start + dt.timedelta(days=gap_days)
 
-            # Clip bars to the project window
             start_clipped = max(start, window_start)
             end_clipped = min(end, window_end)
 
-            # Drop tasks that do not intersect the project window
             if end_clipped <= window_start or start_clipped >= window_end:
                 continue
 
-            # Ensure minimum visible duration after clipping
             if end_clipped <= start_clipped:
                 end_clipped = start_clipped + dt.timedelta(hours=4)
                 if end_clipped > window_end:
@@ -720,6 +718,22 @@ def make_gantt_dataframe(
                     "Tag": g.loc[i, "Tag"],
                     "SHA": g.loc[i, "SHA"],
                     "Descrizione": g.loc[i, "Descrizione"],
+                }
+            )
+
+            if last_end_for_author is None or end_clipped > last_end_for_author:
+                last_end_for_author = end_clipped
+
+        # Idle segment from last activity to window end
+        if last_end_for_author and last_end_for_author < window_end:
+            tasks.append(
+                {
+                    "Autore": autore,
+                    "Start": last_end_for_author,
+                    "End": window_end,
+                    "Tag": "Idle",
+                    "SHA": "",
+                    "Descrizione": "Inattività",
                 }
             )
 
@@ -743,10 +757,13 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         tasks_df,
         x_start="Start",
         x_end="End",
-        y="Autore",                 # Y axis grouped ONLY by author
-        color="Tag",                # keep colors by Activity Tag
+        y="Autore",
+        color="Tag",
+        color_discrete_map={
+            "Idle": "rgba(148,163,184,0.30)",
+        },
         hover_data={
-            "Autore": False,        # already shown on Y axis, optional
+            "Autore": False,
             "Tag": True,
             "SHA": True,
             "Descrizione": True,
@@ -756,7 +773,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
     )
 
     fig.update_traces(marker_line_width=0, width=0.15)
-    fig.update_layout(height=180 + 60 * tasks_df["Autore"].nunique())    
+    fig.update_layout(height=180 + 60 * tasks_df["Autore"].nunique())
 
     x0 = dt.datetime.combine(project_start, dt.time(0, 0))
 
@@ -895,7 +912,6 @@ def main():
         ["Panoramica", "Issue e Pull request", "Contributor", "Autori 360", "Responsabile del progetto"]
     )
 
-    # Panoramica
     with tab_pan:
         st.markdown("#### Panoramica repository")
 
@@ -955,7 +971,6 @@ def main():
         else:
             st.caption("Nessuna attività autori trovata per questo branch.")
 
-    # Issue e PR
     with tab_issues:
         left, right = st.columns(2)
         with left:
@@ -992,7 +1007,6 @@ def main():
             else:
                 st.caption("Nessuna pull request trovata.")
 
-    # Contributor
     with tab_contrib:
         st.markdown("#### Principali contributor (repo intera)")
         if dashboard_data["contributors"]:
@@ -1003,7 +1017,6 @@ def main():
         else:
             st.caption("Nessun contributor trovato.")
 
-    # Autori 360
     with tab_author:
         st.markdown("#### Vista 360 autore sul branch selezionato")
 
@@ -1094,7 +1107,6 @@ def main():
                 else:
                     st.caption("Nessun commit trovato per questo autore.")
 
-    # Responsabile del progetto
     with tab_pm:
         st.markdown("#### Responsabile del progetto")
 
