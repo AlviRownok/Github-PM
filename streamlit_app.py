@@ -639,8 +639,9 @@ def extract_inputs_map(df: pd.DataFrame) -> dict:
 
 def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
     """
-    Aggrega i commit in barre continue per Activity Tag + Autore.
-    Crea più segmenti se tra due commit consecutivi c'è un gap superiore a gap_hours.
+    Crea segmenti continui per Autore.
+    Il colore resta Activity Tag.
+    SHA e descrizioni restano in hover come testo aggregato.
     """
     rows = []
     for _, r in df.iterrows():
@@ -655,79 +656,87 @@ def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
         except Exception:
             continue
 
+        sha = (r.get("SHA") or "").strip()
         desc = (r.get("Activity Description") or "").strip()
+
         rows.append(
             {
-                "Tag": tag,
                 "Autore": autore,
+                "Tag": tag,
                 "TS": ts,
+                "SHA": sha,
                 "Descrizione": desc,
             }
         )
 
     if not rows:
-        return pd.DataFrame(columns=["Task", "Start", "End", "Tag", "Autore", "Descrizione"])
+        return pd.DataFrame(columns=["Autore", "Start", "End", "Tag", "SHAs", "Descrizioni"])
 
-    df0 = pd.DataFrame(rows).sort_values(["Tag", "Autore", "TS"], ascending=True)
+    df0 = pd.DataFrame(rows).sort_values(["Autore", "Tag", "TS"], ascending=True)
 
     gap = dt.timedelta(hours=gap_hours)
-    tasks = []
+    segments = []
 
-    for (tag, autore), g in df0.groupby(["Tag", "Autore"], sort=False):
+    for (autore, tag), g in df0.groupby(["Autore", "Tag"], sort=False):
         g = g.sort_values("TS")
+
         seg_start = None
         seg_end = None
+        seg_shas = []
         seg_descs = []
-
         prev_ts = None
+
         for _, rr in g.iterrows():
             ts = rr["TS"]
-            d = rr.get("Descrizione", "")
+            sha = rr.get("SHA", "")
+            desc = rr.get("Descrizione", "")
 
             if seg_start is None:
                 seg_start = ts
                 seg_end = ts
-                seg_descs = [d] if d else []
+                seg_shas = [sha] if sha else []
+                seg_descs = [desc] if desc else []
                 prev_ts = ts
                 continue
 
             if prev_ts is not None and (ts - prev_ts) > gap:
-                label = f"{autore} | {tag}"
-                tasks.append(
+                segments.append(
                     {
-                        "Task": label,
+                        "Autore": autore,
+                        "Tag": tag,
                         "Start": seg_start,
                         "End": seg_end + dt.timedelta(hours=2),
-                        "Tag": tag,
-                        "Autore": autore,
-                        "Descrizione": " | ".join([x for x in seg_descs if x])[:1200],
+                        "SHAs": ", ".join([s for s in seg_shas if s])[:1500],
+                        "Descrizioni": " | ".join([d for d in seg_descs if d])[:1500],
                     }
                 )
                 seg_start = ts
                 seg_end = ts
-                seg_descs = [d] if d else []
+                seg_shas = [sha] if sha else []
+                seg_descs = [desc] if desc else []
                 prev_ts = ts
                 continue
 
             seg_end = ts
-            if d:
-                seg_descs.append(d)
+            if sha:
+                seg_shas.append(sha)
+            if desc:
+                seg_descs.append(desc)
             prev_ts = ts
 
         if seg_start is not None:
-            label = f"{autore} | {tag}"
-            tasks.append(
+            segments.append(
                 {
-                    "Task": label,
+                    "Autore": autore,
+                    "Tag": tag,
                     "Start": seg_start,
                     "End": seg_end + dt.timedelta(hours=2),
-                    "Tag": tag,
-                    "Autore": autore,
-                    "Descrizione": " | ".join([x for x in seg_descs if x])[:1200],
+                    "SHAs": ", ".join([s for s in seg_shas if s])[:1500],
+                    "Descrizioni": " | ".join([d for d in seg_descs if d])[:1500],
                 }
             )
 
-    return pd.DataFrame(tasks)
+    return pd.DataFrame(segments)
 
 
 def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_dates: list):
@@ -747,10 +756,11 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_d
         tasks_df,
         x_start="Start",
         x_end="End",
-        y="Task",
+        y="Autore",
         color="Tag",
-        hover_data=["Autore", "Descrizione"],
+        hover_data=["Tag", "SHAs", "Descrizioni"],
     )
+
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
         height=min(900, 140 + 28 * len(tasks_df)),
@@ -786,7 +796,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_d
         layer="below",
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ============================================================
