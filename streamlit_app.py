@@ -126,7 +126,7 @@ def get_commit_files_cached(owner: str, repo: str, sha_full: str) -> str:
     """
     try:
         details = github_get(f"/repos/{owner}/{repo}/commits/{sha_full}")
-        files = details.get("files") or []
+        files = (details or {}).get("files") or []
         names = [f.get("filename", "") for f in files if f.get("filename")]
         if not names:
             return ""
@@ -188,7 +188,7 @@ def delete_pm_state(repo_key: str) -> None:
 # ============================================================
 
 def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
-    repo_info = github_get(f"/repos/{owner}/{repo}")
+    repo_info = github_get(f"/repos/{owner}/{repo}") or {}
     default_branch = repo_info.get("default_branch") or "main"
 
     commits_branch_raw = github_get(
@@ -227,7 +227,7 @@ def collect_repo_dashboard_data(owner: str, repo: str, branch: str):
         for c in commits_raw:
             sha_full = c.get("sha", "")
             sha = sha_full[:7]
-            commit = c.get("commit", {})
+            commit = c.get("commit", {}) or {}
             message = (commit.get("message") or "").splitlines()[0]
             author_info = commit.get("author", {}) or {}
             author_name = author_info.get("name")
@@ -427,7 +427,7 @@ def compute_author_activity(owner: str, repo: str, branch: str, author_id: str):
     DETAIL_LIMIT = 50
     for c in author_commits_sorted[:DETAIL_LIMIT]:
         sha_full = c.get("sha_full")
-        details = github_get(f"/repos/{owner}/{repo}/commits/{sha_full}")
+        details = github_get(f"/repos/{owner}/{repo}/commits/{sha_full}") or {}
         stats = details.get("stats") or {}
         additions = stats.get("additions", 0)
         deletions = stats.get("deletions", 0)
@@ -647,6 +647,8 @@ def make_gantt_dataframe(
     rows = []
 
     window_start = dt.datetime.combine(project_start, dt.time(0, 0))
+
+    # Use the visible window right edge based on (extensions OR end)
     right_edge_date = max(extension_dates) if extension_dates else project_end
     window_end = dt.datetime.combine(right_edge_date, dt.time(23, 59))
 
@@ -751,7 +753,17 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         st.info("Compila almeno qualche riga con Activity Tag e Activity Description, poi genera il Gantt.")
         return
 
+    # Keep Idle at the end of the legend, if possible
+    def _tag_sort_key(t: str) -> tuple:
+        return (1, t) if t == "Idle" else (0, t)
+
+    tasks_df = tasks_df.copy()
+    tasks_df["Tag"] = tasks_df["Tag"].fillna("Uncategorized")
     tasks_df = tasks_df.sort_values(["Autore", "Start"], ascending=[True, True])
+
+    category_orders = {
+        "Tag": sorted(tasks_df["Tag"].unique().tolist(), key=_tag_sort_key)
+    }
 
     fig = px.timeline(
         tasks_df,
@@ -759,6 +771,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         x_end="End",
         y="Autore",
         color="Tag",
+        category_orders=category_orders,
         color_discrete_map={
             "Idle": "rgba(148,163,184,0.30)",
         },
@@ -772,14 +785,13 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         },
     )
 
-    fig.update_traces(marker_line_width=0, width=0.15)
-    fig.update_layout(height=180 + 60 * tasks_df["Autore"].nunique())
+    # make bars thinner (your earlier request)
+    fig.update_traces(marker_line_width=0, width=0.075)
 
     x0 = dt.datetime.combine(project_start, dt.time(0, 0))
 
     right_edge_date = max(extension_dates) if extension_dates else project_end
     x1_candidate = dt.datetime.combine(right_edge_date, dt.time(23, 59))
-
     max_task_end = tasks_df["End"].max()
     x1 = max(x1_candidate, max_task_end)
 
@@ -795,23 +807,34 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         margin=dict(l=10, r=10, t=40, b=10),
     )
 
-    end_dt = dt.datetime.combine(project_end + dt.timedelta(days=1), dt.time(0, 0))
+    # ------------------------------------------------------------
+    # Deadline lines (project end + every extension date)
+    # Draw at midnight AFTER the selected day to represent "end of day"
+    # and avoid the 23:59 -> next-day visual shift.
+    # ------------------------------------------------------------
+    def _deadline_boundary(d: dt.date) -> dt.datetime:
+        return dt.datetime.combine(d + dt.timedelta(days=1), dt.time(0, 0))
 
+    # Project end (primary)
+    end_dt = _deadline_boundary(project_end)
     fig.add_vline(x=end_dt, line_width=2, line_dash="dot", line_color="#ef4444")
 
-    max_task_end = tasks_df["End"].max()
-    max_ext = None
+    # Extensions (secondary)
+    ext_dates_unique = []
     if extension_dates:
         try:
-            max_ext = max(extension_dates)
+            ext_dates_unique = sorted({d for d in extension_dates if isinstance(d, dt.date)})
         except Exception:
-            max_ext = None
+            ext_dates_unique = []
 
-    if max_ext:
-        ext_dt = dt.datetime.combine(max_ext, dt.time(23, 59))
-        shade_end = max(ext_dt, max_task_end)
-    else:
-        shade_end = max_task_end
+    for d in ext_dates_unique:
+        ext_dt = _deadline_boundary(d)
+        fig.add_vline(x=ext_dt, line_width=1, line_dash="dot", line_color="#f59e0b")
+
+    # Shade extension area (from project end boundary to last extension boundary / last task end)
+    max_task_end = tasks_df["End"].max()
+    max_ext_dt = _deadline_boundary(ext_dates_unique[-1]) if ext_dates_unique else None
+    shade_end = max(max_ext_dt, max_task_end) if max_ext_dt else max_task_end
 
     fig.add_vrect(
         x0=end_dt,
@@ -821,7 +844,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         layer="below",
     )
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # ============================================================
