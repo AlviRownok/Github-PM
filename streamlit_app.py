@@ -118,6 +118,23 @@ def github_get(path: str, params=None):
         raise RuntimeError(f"Impossibile decodificare risposta GitHub: {exc}") from exc
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_commit_files_cached(owner: str, repo: str, sha_full: str) -> str:
+    """
+    Ritorna i nomi file modificati in un commit (comma-separated).
+    Cache per ridurre chiamate API e rendere la tab PM veloce.
+    """
+    try:
+        details = github_get(f"/repos/{owner}/{repo}/commits/{sha_full}")
+        files = details.get("files") or []
+        names = [f.get("filename", "") for f in files if f.get("filename")]
+        if not names:
+            return ""
+        return ", ".join(names)
+    except Exception:
+        return ""
+
+
 # ============================================================
 # Persistenza locale
 # ============================================================
@@ -569,18 +586,21 @@ def generate_author_report_html(summary, commits) -> str:
 # Blocco Project Manager
 # ============================================================
 
-def build_pm_table_from_commits(commits: list) -> pd.DataFrame:
+def build_pm_table_from_commits(owner: str, repo: str, commits: list) -> pd.DataFrame:
     rows = []
     for c in commits:
+        sha_full = c.get("sha_full", "")
+        files_changed = get_commit_files_cached(owner, repo, sha_full) if sha_full else ""
         rows.append(
             {
                 "SHA": c.get("sha", ""),
                 "Messaggio": c.get("message", ""),
+                "File modificati": files_changed,
                 "Autore": c.get("author", ""),
                 "Data e ora commit": c.get("date_display", ""),
                 "Activity Tag": "",
                 "Activity Description": "",
-                "sha_full": c.get("sha_full", ""),
+                "sha_full": sha_full,
             }
         )
     return pd.DataFrame(rows)
@@ -829,14 +849,23 @@ def main():
 
         st.markdown("##### Attività commit (ultime 12 settimane, livello repository)")
         if dashboard_data["commit_weeks"]:
-            df_weeks = pd.DataFrame(dashboard_data["commit_weeks"]).rename(columns={"label": "Settimana", "total": "Commit"}).set_index("Settimana")
+            df_weeks = (
+                pd.DataFrame(dashboard_data["commit_weeks"])
+                .rename(columns={"label": "Settimana", "total": "Commit"})
+                .set_index("Settimana")
+            )
             st.line_chart(df_weeks, use_container_width=True)
         else:
             st.caption("Nessun dato di attività commit disponibile (GitHub potrebbe essere ancora in elaborazione).")
 
         st.markdown("##### Commit recenti sul branch (solo commit specifici)")
         if dashboard_data["commits"]:
-            df_commits = pd.DataFrame(dashboard_data["commits"]).rename(columns={"sha": "SHA", "message": "Messaggio", "author": "Autore", "date_display": "Data"})[["SHA", "Messaggio", "Autore", "Data"]]
+            df_commits = (
+                pd.DataFrame(dashboard_data["commits"])
+                .rename(columns={"sha": "SHA", "message": "Messaggio", "author": "Autore", "date_display": "Data"})[
+                    ["SHA", "Messaggio", "Autore", "Data"]
+                ]
+            )
             st.dataframe(df_commits, use_container_width=True, hide_index=True)
         else:
             st.caption("Nessun commit specifico trovato per questo branch.")
@@ -844,7 +873,13 @@ def main():
         st.markdown("##### Riepilogo autori sul branch")
         if dashboard_data["author_overview"]:
             df_auth = pd.DataFrame(dashboard_data["author_overview"]).rename(
-                columns={"display": "Autore", "commits": "Commit", "first_date_display": "Primo commit", "last_date_display": "Ultimo commit", "days_active": "Giorni attivi"}
+                columns={
+                    "display": "Autore",
+                    "commits": "Commit",
+                    "first_date_display": "Primo commit",
+                    "last_date_display": "Ultimo commit",
+                    "days_active": "Giorni attivi",
+                }
             )[["Autore", "Commit", "Primo commit", "Ultimo commit", "Giorni attivi"]]
             st.dataframe(df_auth, use_container_width=True, hide_index=True)
         else:
@@ -857,7 +892,14 @@ def main():
             st.markdown("#### Issue (ultime 50)")
             if dashboard_data["issues"]:
                 df_issues = pd.DataFrame(dashboard_data["issues"]).rename(
-                    columns={"number": "Numero", "title": "Titolo", "state": "Stato", "assignee": "Assegnato a", "updated_display": "Aggiornato", "url": "URL"}
+                    columns={
+                        "number": "Numero",
+                        "title": "Titolo",
+                        "state": "Stato",
+                        "assignee": "Assegnato a",
+                        "updated_display": "Aggiornato",
+                        "url": "URL",
+                    }
                 )[["Numero", "Titolo", "Stato", "Assegnato a", "Aggiornato", "URL"]]
                 st.dataframe(df_issues, use_container_width=True, hide_index=True)
             else:
@@ -867,7 +909,14 @@ def main():
             st.markdown("#### Pull request (ultime 50)")
             if dashboard_data["pulls"]:
                 df_pr = pd.DataFrame(dashboard_data["pulls"]).rename(
-                    columns={"number": "Numero", "title": "Titolo", "state": "Stato", "author": "Autore", "updated_display": "Aggiornato", "url": "URL"}
+                    columns={
+                        "number": "Numero",
+                        "title": "Titolo",
+                        "state": "Stato",
+                        "author": "Autore",
+                        "updated_display": "Aggiornato",
+                        "url": "URL",
+                    }
                 )[["Numero", "Titolo", "Stato", "Autore", "Aggiornato", "URL"]]
                 st.dataframe(df_pr, use_container_width=True, hide_index=True)
             else:
@@ -877,7 +926,9 @@ def main():
     with tab_contrib:
         st.markdown("#### Principali contributor (repo intera)")
         if dashboard_data["contributors"]:
-            df_contrib = pd.DataFrame(dashboard_data["contributors"]).rename(columns={"login": "Login", "commits": "Commit", "avatar": "Avatar", "url": "URL"})[["Login", "Commit", "Avatar", "URL"]]
+            df_contrib = pd.DataFrame(dashboard_data["contributors"]).rename(
+                columns={"login": "Login", "commits": "Commit", "avatar": "Avatar", "url": "URL"}
+            )[["Login", "Commit", "Avatar", "URL"]]
             st.dataframe(df_contrib, use_container_width=True, hide_index=True)
         else:
             st.caption("Nessun contributor trovato.")
@@ -896,7 +947,12 @@ def main():
 
             if st.button("Calcola vista 360 autore"):
                 try:
-                    summary, commits = compute_author_activity(dashboard_data["owner"], dashboard_data["repo"], dashboard_data["branch"], author_id)
+                    summary, commits = compute_author_activity(
+                        dashboard_data["owner"],
+                        dashboard_data["repo"],
+                        dashboard_data["branch"],
+                        author_id,
+                    )
                 except Exception as exc:
                     st.error(f"Errore vista autore: {exc}")
                     return
@@ -915,14 +971,28 @@ def main():
 
                 st.markdown("##### Attività nel tempo")
                 if summary["activity_by_day"]:
-                    df_ad = pd.DataFrame(summary["activity_by_day"]).rename(columns={"label": "Data", "total": "Commit"}).set_index("Data")
+                    df_ad = (
+                        pd.DataFrame(summary["activity_by_day"])
+                        .rename(columns={"label": "Data", "total": "Commit"})
+                        .set_index("Data")
+                    )
                     st.line_chart(df_ad, use_container_width=True)
                 else:
                     st.caption("Nessun commit datato da mostrare.")
 
                 st.markdown("##### Variazioni per commit (ultimi 50)")
                 if commits:
-                    df_changes = pd.DataFrame(commits)[["date_display", "additions", "deletions"]].rename(columns={"date_display": "Data", "additions": "Righe aggiunte", "deletions": "Righe rimosse"}).set_index("Data")
+                    df_changes = (
+                        pd.DataFrame(commits)[["date_display", "additions", "deletions"]]
+                        .rename(
+                            columns={
+                                "date_display": "Data",
+                                "additions": "Righe aggiunte",
+                                "deletions": "Righe rimosse",
+                            }
+                        )
+                        .set_index("Data")
+                    )
                     st.bar_chart(df_changes, use_container_width=True)
                 else:
                     st.caption("Nessun dato di diff disponibile.")
@@ -930,8 +1000,18 @@ def main():
                 st.markdown("##### Dettaglio commit")
                 if commits:
                     df_c = pd.DataFrame(commits).rename(
-                        columns={"date_display": "Data", "sha": "SHA", "message": "Messaggio", "additions": "Righe +", "deletions": "Righe -", "files_changed": "File modificati", "file_names": "Nomi file"}
-                    )[["Data", "SHA", "Messaggio", "Righe +", "Righe -", "File modificati", "Nomi file"]]
+                        columns={
+                            "date_display": "Data",
+                            "sha": "SHA",
+                            "message": "Messaggio",
+                            "additions": "Righe +",
+                            "deletions": "Righe -",
+                            "files_changed": "File modificati",
+                            "file_names": "Nomi file",
+                        }
+                    )[
+                        ["Data", "SHA", "Messaggio", "Righe +", "Righe -", "File modificati", "Nomi file"]
+                    ]
                     st.dataframe(df_c, use_container_width=True, hide_index=True)
 
                     html_report = generate_author_report_html(summary, commits)
@@ -1005,7 +1085,7 @@ def main():
 
         st.markdown("##### Registro attività sui commit del branch")
 
-        base_df = build_pm_table_from_commits(dashboard_data["commits"])
+        base_df = build_pm_table_from_commits(owner, repo, dashboard_data["commits"])
         base_df = merge_saved_inputs(base_df, saved.get("commit_inputs", {}))
 
         edited = st.data_editor(
@@ -1018,7 +1098,7 @@ def main():
                 "Activity Description": st.column_config.TextColumn("Activity Description", required=False),
                 "sha_full": st.column_config.TextColumn("sha_full", disabled=True),
             },
-            disabled=["SHA", "Messaggio", "Autore", "Data e ora commit", "sha_full"],
+            disabled=["SHA", "Messaggio", "File modificati", "Autore", "Data e ora commit", "sha_full"],
         )
 
         save_cols = st.columns([1, 1, 2])
@@ -1055,6 +1135,7 @@ def main():
             save_pm_state(repo_key, pm_state)
 
             st.caption("L’area evidenziata dopo la data fine progetto rappresenta la fase di estensione.")
+
 
 if __name__ == "__main__":
     main()
