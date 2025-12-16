@@ -795,7 +795,8 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         margin=dict(l=10, r=10, t=40, b=10),
     )
 
-    end_dt = dt.datetime.combine(project_end, dt.time(23, 59))
+    end_dt = dt.datetime.combine(project_end + dt.timedelta(days=1), dt.time(0, 0))
+
     fig.add_vline(x=end_dt, line_width=2, line_dash="dot", line_color="#ef4444")
 
     max_task_end = tasks_df["End"].max()
