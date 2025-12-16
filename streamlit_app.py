@@ -743,24 +743,23 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         st.info("Compila almeno qualche riga con Activity Tag e Activity Description, poi genera il Gantt.")
         return
 
-    tasks_df = tasks_df.sort_values(["Autore", "Start", "Tag"], ascending=[True, True, True])
+    tasks_df = tasks_df.sort_values(["Autore", "Start"], ascending=[True, True])
 
     fig = px.timeline(
-            tasks_df,
-            x_start="Start",
-            x_end="End",
-            y="Autore",
-            color="Tag",
-            hover_data={
-                "Autore": True,
-                "Tag": True,
-                "Start": True,
-                "End": True,
-                "SHA": True,
-                "Descrizione": True,
-                "Task": False,
-            },
-        )
+        tasks_df,
+        x_start="Start",
+        x_end="End",
+        y="Autore",                 # Y axis grouped ONLY by author
+        color="Tag",                # keep colors by Activity Tag
+        hover_data={
+            "Autore": False,        # already shown on Y axis, optional
+            "Tag": True,
+            "SHA": True,
+            "Descrizione": True,
+            "Start": True,
+            "End": True,
+        },
+    )
 
     x0 = dt.datetime.combine(project_start, dt.time(0, 0))
     x1 = dt.datetime.combine(max(extension_dates) if extension_dates else project_end, dt.time(23, 59))
