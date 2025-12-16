@@ -637,43 +637,96 @@ def extract_inputs_map(df: pd.DataFrame) -> dict:
     return out
 
 
-def make_gantt_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    tasks = []
+def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
+    """
+    Aggrega i commit in barre continue per Activity Tag + Autore.
+    Crea più segmenti se tra due commit consecutivi c'è un gap superiore a gap_hours.
+    """
+    rows = []
     for _, r in df.iterrows():
         tag = (r.get("Activity Tag") or "").strip()
-        if not tag:
+        autore = (r.get("Autore") or "").strip()
+        if not tag or not autore:
             continue
+
         dt_str = (r.get("Data e ora commit") or "").strip()
         try:
-            start = dt.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+            ts = dt.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
         except Exception:
             continue
-        end = start + dt.timedelta(hours=2)
 
-        autore = (r.get("Autore") or "").strip()
         desc = (r.get("Activity Description") or "").strip()
-        sha = (r.get("SHA") or "").strip()
-
-        label_parts = []
-        if tag:
-            label_parts.append(tag)
-        if autore:
-            label_parts.append(autore)
-        if sha:
-            label_parts.append(sha)
-        label = " | ".join(label_parts)
-
-        tasks.append(
+        rows.append(
             {
-                "Task": label,
-                "Start": start,
-                "End": end,
                 "Tag": tag,
                 "Autore": autore,
+                "TS": ts,
                 "Descrizione": desc,
-                "SHA": sha,
             }
         )
+
+    if not rows:
+        return pd.DataFrame(columns=["Task", "Start", "End", "Tag", "Autore", "Descrizione"])
+
+    df0 = pd.DataFrame(rows).sort_values(["Tag", "Autore", "TS"], ascending=True)
+
+    gap = dt.timedelta(hours=gap_hours)
+    tasks = []
+
+    for (tag, autore), g in df0.groupby(["Tag", "Autore"], sort=False):
+        g = g.sort_values("TS")
+        seg_start = None
+        seg_end = None
+        seg_descs = []
+
+        prev_ts = None
+        for _, rr in g.iterrows():
+            ts = rr["TS"]
+            d = rr.get("Descrizione", "")
+
+            if seg_start is None:
+                seg_start = ts
+                seg_end = ts
+                seg_descs = [d] if d else []
+                prev_ts = ts
+                continue
+
+            if prev_ts is not None and (ts - prev_ts) > gap:
+                label = f"{tag} | {autore}"
+                tasks.append(
+                    {
+                        "Task": label,
+                        "Start": seg_start,
+                        "End": seg_end + dt.timedelta(hours=2),
+                        "Tag": tag,
+                        "Autore": autore,
+                        "Descrizione": " | ".join([x for x in seg_descs if x])[:1200],
+                    }
+                )
+                seg_start = ts
+                seg_end = ts
+                seg_descs = [d] if d else []
+                prev_ts = ts
+                continue
+
+            seg_end = ts
+            if d:
+                seg_descs.append(d)
+            prev_ts = ts
+
+        if seg_start is not None:
+            label = f"{tag} | {autore}"
+            tasks.append(
+                {
+                    "Task": label,
+                    "Start": seg_start,
+                    "End": seg_end + dt.timedelta(hours=2),
+                    "Tag": tag,
+                    "Autore": autore,
+                    "Descrizione": " | ".join([x for x in seg_descs if x])[:1200],
+                }
+            )
+
     return pd.DataFrame(tasks)
 
 
@@ -1122,7 +1175,7 @@ def main():
 
         st.markdown("##### Gantt chart")
         if st.button("Genera Gantt chart", key=f"pm_gantt_{repo_key}"):
-            tasks_df = make_gantt_dataframe(edited)
+            tasks_df = make_gantt_dataframe(edited, gap_hours=12)
             render_gantt_chart(tasks_df=tasks_df, project_end=project_end, extension_dates=st.session_state.pm_extensions[repo_key])
 
             pm_state = {
