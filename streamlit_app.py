@@ -730,7 +730,7 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_start: dt.date, project_e
         },
     )
 
-    fig.update_traces(marker_line_width=0)
+    fig.update_traces(marker_line_width=0, width=0.45)
     fig.update_layout(height=180 + 60 * tasks_df["Autore"].nunique())    
 
     x0 = dt.datetime.combine(project_start, dt.time(0, 0))
