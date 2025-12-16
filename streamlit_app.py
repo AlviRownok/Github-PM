@@ -637,11 +637,10 @@ def extract_inputs_map(df: pd.DataFrame) -> dict:
     return out
 
 
-def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
+def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12, last_fallback_hours: int = 6) -> pd.DataFrame:
     """
-    Crea segmenti continui per Autore.
-    Il colore resta Activity Tag.
-    SHA e descrizioni restano in hover come testo aggregato.
+    Crea barre continue per Tag e Autore, con END automatico al commit successivo.
+    Se tra due commit consecutivi c'è un gap > gap_hours, chiude la barra con fallback.
     """
     rows = []
     for _, r in df.iterrows():
@@ -656,87 +655,106 @@ def make_gantt_dataframe(df: pd.DataFrame, gap_hours: int = 12) -> pd.DataFrame:
         except Exception:
             continue
 
-        sha = (r.get("SHA") or "").strip()
         desc = (r.get("Activity Description") or "").strip()
-
+        sha = (r.get("SHA") or "").strip()
         rows.append(
             {
-                "Autore": autore,
                 "Tag": tag,
+                "Autore": autore,
                 "TS": ts,
-                "SHA": sha,
                 "Descrizione": desc,
+                "SHA": sha,
             }
         )
 
     if not rows:
-        return pd.DataFrame(columns=["Autore", "Start", "End", "Tag", "SHAs", "Descrizioni"])
+        return pd.DataFrame(columns=["Autore", "Start", "End", "Tag", "Descrizione", "SHA", "Task"])
 
-    df0 = pd.DataFrame(rows).sort_values(["Autore", "Tag", "TS"], ascending=True)
+    df0 = pd.DataFrame(rows).sort_values(["Autore", "Tag", "TS"], ascending=True).reset_index(drop=True)
 
     gap = dt.timedelta(hours=gap_hours)
-    segments = []
+    fallback = dt.timedelta(hours=last_fallback_hours)
 
+    tasks = []
+
+    # Per ogni Autore + Tag, trasformo i commit in intervalli [ts_i, ts_{i+1}]
+    # Poi unisco intervalli consecutivi (senza gap grandi).
     for (autore, tag), g in df0.groupby(["Autore", "Tag"], sort=False):
-        g = g.sort_values("TS")
+        g = g.sort_values("TS").reset_index(drop=True)
+        ts_list = g["TS"].tolist()
 
-        seg_start = None
-        seg_end = None
-        seg_shas = []
-        seg_descs = []
-        prev_ts = None
+        # intervalli base
+        intervals = []
+        for i, ts in enumerate(ts_list):
+            if i < len(ts_list) - 1:
+                ts_next = ts_list[i + 1]
+                if (ts_next - ts) > gap:
+                    end = ts + fallback
+                else:
+                    end = ts_next
+            else:
+                end = ts + fallback
 
-        for _, rr in g.iterrows():
-            ts = rr["TS"]
-            sha = rr.get("SHA", "")
-            desc = rr.get("Descrizione", "")
-
-            if seg_start is None:
-                seg_start = ts
-                seg_end = ts
-                seg_shas = [sha] if sha else []
-                seg_descs = [desc] if desc else []
-                prev_ts = ts
-                continue
-
-            if prev_ts is not None and (ts - prev_ts) > gap:
-                segments.append(
-                    {
-                        "Autore": autore,
-                        "Tag": tag,
-                        "Start": seg_start,
-                        "End": seg_end + dt.timedelta(hours=2),
-                        "SHAs": ", ".join([s for s in seg_shas if s])[:1500],
-                        "Descrizioni": " | ".join([d for d in seg_descs if d])[:1500],
-                    }
-                )
-                seg_start = ts
-                seg_end = ts
-                seg_shas = [sha] if sha else []
-                seg_descs = [desc] if desc else []
-                prev_ts = ts
-                continue
-
-            seg_end = ts
-            if sha:
-                seg_shas.append(sha)
-            if desc:
-                seg_descs.append(desc)
-            prev_ts = ts
-
-        if seg_start is not None:
-            segments.append(
+            intervals.append(
                 {
-                    "Autore": autore,
-                    "Tag": tag,
-                    "Start": seg_start,
-                    "End": seg_end + dt.timedelta(hours=2),
-                    "SHAs": ", ".join([s for s in seg_shas if s])[:1500],
-                    "Descrizioni": " | ".join([d for d in seg_descs if d])[:1500],
+                    "start": ts,
+                    "end": end,
+                    "desc": (g.loc[i, "Descrizione"] or "").strip(),
+                    "sha": (g.loc[i, "SHA"] or "").strip(),
                 }
             )
 
-    return pd.DataFrame(segments)
+        # merge intervalli contigui o sovrapposti
+        cur_start = None
+        cur_end = None
+        cur_descs = []
+        cur_shas = []
+
+        def flush():
+            nonlocal cur_start, cur_end, cur_descs, cur_shas
+            if cur_start is None or cur_end is None:
+                return
+            tasks.append(
+                {
+                    "Autore": autore,
+                    "Start": cur_start,
+                    "End": cur_end,
+                    "Tag": tag,
+                    "Descrizione": " | ".join([x for x in cur_descs if x])[:2000],
+                    "SHA": ", ".join([x for x in cur_shas if x])[:2000],
+                    "Task": f"{tag}",
+                }
+            )
+            cur_start = None
+            cur_end = None
+            cur_descs = []
+            cur_shas = []
+
+        for it in intervals:
+            s = it["start"]
+            e = it["end"]
+
+            if cur_start is None:
+                cur_start = s
+                cur_end = e
+            else:
+                # se l'intervallo inizia entro la fine corrente, lo unisco
+                if s <= cur_end:
+                    if e > cur_end:
+                        cur_end = e
+                else:
+                    flush()
+                    cur_start = s
+                    cur_end = e
+
+            if it["desc"]:
+                cur_descs.append(it["desc"])
+            if it["sha"]:
+                cur_shas.append(it["sha"])
+
+        flush()
+
+    return pd.DataFrame(tasks)
 
 
 def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_dates: list):
@@ -753,13 +771,21 @@ def render_gantt_chart(tasks_df: pd.DataFrame, project_end: dt.date, extension_d
     tasks_df = tasks_df.sort_values(["Autore", "Start", "Tag"], ascending=[True, True, True])
 
     fig = px.timeline(
-        tasks_df,
-        x_start="Start",
-        x_end="End",
-        y="Autore",
-        color="Tag",
-        hover_data=["Tag", "SHAs", "Descrizioni"],
-    )
+            tasks_df,
+            x_start="Start",
+            x_end="End",
+            y="Autore",
+            color="Tag",
+            hover_data={
+                "Autore": True,
+                "Tag": True,
+                "Start": True,
+                "End": True,
+                "SHA": True,
+                "Descrizione": True,
+                "Task": False,
+            },
+        )
 
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(
