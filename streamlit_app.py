@@ -1191,7 +1191,8 @@ def main():
 
         st.markdown("##### Gantt chart")
         if st.button("Genera Gantt chart", key=f"pm_gantt_{repo_key}"):
-            tasks_df = make_gantt_dataframe(edited, gap_hours=12)
+            tasks_df = make_gantt_dataframe(edited, gap_days=2)
+            #tasks_df = make_gantt_dataframe(edited, gap_days=1)
             render_gantt_chart(
                 tasks_df=tasks_df,
                 project_start=project_start,
