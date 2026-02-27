@@ -2127,21 +2127,27 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
         fig = px.pie(df, values="Count", names="Classification",
                      color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4)
-        fig.update_layout(**_chart_layout("Files by Classification", 450))
-        fig.update_traces(textinfo="label+percent", textfont_size=13)
-        return _fig_to_png_bytes(fig, 750, 450)
+        fig.update_layout(**_chart_layout("Files by Classification", 350),
+                          margin=dict(l=30, r=30, t=50, b=60),
+                          legend=dict(orientation="h", yanchor="top", y=-0.08,
+                                      xanchor="center", x=0.5, font=dict(size=11)))
+        fig.update_traces(textinfo="percent", textfont_size=11, textposition="inside")
+        return _fig_to_png_bytes(fig, 600, 350)
     _try_chart("file_class_pie", _c3)
 
     # 4) File extension pie
     def _c4():
         if not ext_counter:
             return None
-        df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
+        df = pd.DataFrame(ext_counter.most_common(8), columns=["Extension", "Count"])
         fig = px.pie(df, values="Count", names="Extension",
                      color_discrete_sequence=px.colors.qualitative.Pastel, hole=0.4)
-        fig.update_layout(**_chart_layout("Files by Extension", 450))
-        fig.update_traces(textinfo="label+percent", textfont_size=13)
-        return _fig_to_png_bytes(fig, 750, 450)
+        fig.update_layout(**_chart_layout("Files by Extension", 350),
+                          margin=dict(l=30, r=30, t=50, b=60),
+                          legend=dict(orientation="h", yanchor="top", y=-0.08,
+                                      xanchor="center", x=0.5, font=dict(size=11)))
+        fig.update_traces(textinfo="percent", textfont_size=11, textposition="inside")
+        return _fig_to_png_bytes(fig, 600, 350)
     _try_chart("file_ext_pie", _c4)
 
     # 5) Top files by commits
