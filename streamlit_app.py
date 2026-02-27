@@ -8,6 +8,7 @@ import os
 import json
 import base64
 import datetime as dt
+import io
 from urllib.parse import urlparse
 from collections import Counter, defaultdict
 
@@ -18,6 +19,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 from jinja2 import Template
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm, cm
+from reportlab.lib.colors import HexColor
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage,
+    PageBreak, KeepTogether,
+)
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
 # ═══════════════════════════════════════════════════════════════
 # Configuration
@@ -1013,6 +1023,30 @@ def page_pull_requests(D):
 # SECTION: Author Intelligence
 # ═══════════════════════════════════════════════════════════════
 
+def _build_author_file_analysis(enriched):
+    """Analyze per-file statistics from enriched commit data."""
+    file_stats = defaultdict(lambda: {"additions": 0, "deletions": 0, "commits": 0})
+    for c in enriched:
+        for fn in c.get("_file_details", []):
+            name = fn.get("filename", "")
+            if not name:
+                continue
+            fs = file_stats[name]
+            fs["additions"] += fn.get("additions", 0)
+            fs["deletions"] += fn.get("deletions", 0)
+            fs["commits"] += 1
+
+    # Classification
+    for name, fs in file_stats.items():
+        fs["classification"] = _classify_file(name)
+        ext = "." + name.rsplit(".", 1)[-1] if "." in name else "(none)"
+        fs["extension"] = ext.lower()
+        fs["net"] = fs["additions"] - fs["deletions"]
+        fs["filename"] = name
+
+    return dict(file_stats)
+
+
 def page_author_intelligence(D):
     _section_hdr("Author Intelligence",
                  "Deep analysis of individual contributor activity on the branch")
@@ -1026,6 +1060,7 @@ def page_author_intelligence(D):
 
     if st.button("Analyze Contributor", type="primary"):
         owner, repo = D["owner"], D["repo"]
+        # Get ALL commits for this author — no limit
         ac = sorted(
             [c for c in D["commits"] if c["author_id"] == selected and c["date"]],
             key=lambda x: x["date"],
@@ -1036,8 +1071,8 @@ def page_author_intelligence(D):
 
         ta, td, tf = 0, 0, 0
         enriched = []
-        with st.spinner("Fetching commit details..."):
-            for c in ac[:50]:
+        with st.spinner(f"Fetching details for {len(ac)} commits (this may take a moment)..."):
+            for c in ac:
                 det = _fetch_commit_detail(owner, repo, c["sha_full"])
                 s = det.get("stats", {})
                 fs = det.get("files", [])
@@ -1049,30 +1084,47 @@ def page_author_intelligence(D):
                     **c, "additions": a_val, "deletions": d_val,
                     "files_changed": len(fs),
                     "file_names": ", ".join(f.get("filename", "") for f in fs),
+                    "_file_details": fs,
                 })
 
+        # Author info
         si = astats[selected]
         f, l = si["first"], si["last"]
         days = (l.date() - f.date()).days + 1 if f and l else 0
+        avg_per_day = len(ac) / max(days, 1)
 
+        # File analysis
+        file_analysis = _build_author_file_analysis(enriched)
+        unique_files = len(file_analysis)
+        cls_counter = Counter(fs["classification"] for fs in file_analysis.values())
+        ext_counter = Counter(fs["extension"] for fs in file_analysis.values())
+        # Top files by commits
+        top_files = sorted(file_analysis.values(), key=lambda x: -x["commits"])[:20]
+        # Top files by churn (additions + deletions)
+        top_churn = sorted(file_analysis.values(), key=lambda x: -(x["additions"] + x["deletions"]))[:15]
+
+        # --- KPI Cards ---
         _metric_row([
             ("Total Commits", str(len(ac))),
             ("Lines Added", _fnum(ta)),
             ("Lines Removed", _fnum(td)),
             ("Net Lines", _fnum(ta - td)),
-            ("Files Touched", str(tf)),
+            ("Unique Files", str(unique_files)),
             ("Days Active", str(days)),
+            ("Avg Commits/Day", f"{avg_per_day:.1f}"),
+            ("Files/Commit", f"{tf / max(len(ac), 1):.1f}"),
         ])
 
+        # --- Row 1: Daily Activity & Code Changes ---
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("#### Daily Activity")
+            st.markdown("#### Daily Commit Activity")
             dc = Counter(c["date_day"] for c in ac)
             if dc:
                 df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
                 fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#6366f1"])
-                fig.update_layout(**_plotly_layout(250))
-                st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(**_plotly_layout(280))
+                st.plotly_chart(fig, use_container_width=True, key="ai_daily")
 
         with c2:
             st.markdown("#### Code Changes per Commit")
@@ -1081,28 +1133,144 @@ def page_author_intelligence(D):
                 df.columns = ["Date", "Additions", "Deletions"]
                 fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
                              color_discrete_sequence=["#22c55e", "#ef4444"])
-                fig.update_layout(**_plotly_layout(250))
-                st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(**_plotly_layout(280))
+                st.plotly_chart(fig, use_container_width=True, key="ai_changes")
 
-        st.markdown("#### Commit Details")
+        # --- Row 2: File Classification Pie & File Extension Pie ---
+        c3, c4 = st.columns(2)
+        with c3:
+            st.markdown("#### Files by Classification")
+            if cls_counter:
+                df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
+                fig = px.pie(df, values="Count", names="Classification",
+                             color_discrete_sequence=px.colors.qualitative.Set2,
+                             hole=0.4)
+                fig.update_layout(**_plotly_layout(320))
+                fig.update_traces(textinfo="label+percent", textfont_size=11)
+                st.plotly_chart(fig, use_container_width=True, key="ai_cls_pie")
+
+        with c4:
+            st.markdown("#### Files by Extension")
+            if ext_counter:
+                df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
+                fig = px.pie(df, values="Count", names="Extension",
+                             color_discrete_sequence=px.colors.qualitative.Pastel,
+                             hole=0.4)
+                fig.update_layout(**_plotly_layout(320))
+                fig.update_traces(textinfo="label+percent", textfont_size=11)
+                st.plotly_chart(fig, use_container_width=True, key="ai_ext_pie")
+
+        # --- Row 3: Top Files by Commits & Churn ---
+        c5, c6 = st.columns(2)
+        with c5:
+            st.markdown("#### Top Files by Commit Frequency")
+            if top_files:
+                df = pd.DataFrame(top_files)[["filename", "commits", "additions", "deletions"]]
+                df.columns = ["File", "Commits", "Lines +", "Lines −"]
+                df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
+                fig = px.bar(df, x="Commits", y="File", orientation="h",
+                             color_discrete_sequence=["#8b5cf6"])
+                fig.update_layout(**_plotly_layout(min(380, 40 + len(top_files) * 22)))
+                fig.update_layout(yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, use_container_width=True, key="ai_topfiles")
+
+        with c6:
+            st.markdown("#### Top Files by Code Churn")
+            if top_churn:
+                df = pd.DataFrame(top_churn)
+                df["churn"] = df["additions"] + df["deletions"]
+                df["short"] = df["filename"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
+                fig = px.bar(df, x="churn", y="short", orientation="h",
+                             color="churn", color_continuous_scale="YlOrRd")
+                fig.update_layout(**_plotly_layout(min(380, 40 + len(top_churn) * 22)))
+                fig.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
+                st.plotly_chart(fig, use_container_width=True, key="ai_churn")
+
+        # --- Row 4: Cumulative Lines & Weekly Heatmap ---
+        c7, c8 = st.columns(2)
+        with c7:
+            st.markdown("#### Cumulative Lines Over Time")
+            if enriched:
+                cum_add, cum_del = 0, 0
+                cum_data = []
+                for c_item in enriched:
+                    cum_add += c_item["additions"]
+                    cum_del += c_item["deletions"]
+                    cum_data.append({"Date": c_item["date_str"], "Added": cum_add,
+                                     "Removed": cum_del, "Net": cum_add - cum_del})
+                df = pd.DataFrame(cum_data)
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
+                                         name="Cumulative +", line=dict(color="#22c55e", width=2)))
+                fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
+                                         name="Cumulative −", line=dict(color="#ef4444", width=2)))
+                fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
+                                         name="Net", line=dict(color="#3b82f6", width=2, dash="dot")))
+                fig.update_layout(**_plotly_layout(280))
+                st.plotly_chart(fig, use_container_width=True, key="ai_cumulative")
+
+        with c8:
+            st.markdown("#### Commits by Day of Week")
+            if ac:
+                days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
+                df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
+                                  columns=["Day", "Commits"])
+                fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f59e0b"],
+                             category_orders={"Day": days_of_week})
+                fig.update_layout(**_plotly_layout(280))
+                st.plotly_chart(fig, use_container_width=True, key="ai_dow")
+
+        # --- Row 5: Commit Size Distribution ---
+        st.markdown("#### Commit Size Distribution")
+        if enriched:
+            sizes = [e["additions"] + e["deletions"] for e in enriched]
+            fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
+                               x="Lines Changed", nbins=30,
+                               color_discrete_sequence=["#6366f1"])
+            fig.update_layout(**_plotly_layout(250))
+            st.plotly_chart(fig, use_container_width=True, key="ai_sizedist")
+
+        # --- Full Commit Details Table ---
+        st.markdown("#### Full Commit History")
         if enriched:
             df = pd.DataFrame(enriched)[
                 ["sha", "message", "date_str", "additions", "deletions", "files_changed", "file_names"]]
-            df.columns = ["SHA", "Message", "Date", "Lines +", "Lines \u2212", "Files", "File Names"]
-            st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+            df.columns = ["SHA", "Message", "Date", "Lines +", "Lines −", "Files", "File Names"]
+            st.dataframe(df, use_container_width=True, hide_index=True,
+                         height=min(600, 60 + len(enriched) * 35))
 
+        # --- Detailed File Table ---
+        st.markdown("#### All Files Touched")
+        if file_analysis:
+            fa_list = sorted(file_analysis.values(), key=lambda x: -x["commits"])
+            df = pd.DataFrame(fa_list)[["filename", "classification", "extension",
+                                        "commits", "additions", "deletions", "net"]]
+            df.columns = ["File Path", "Category", "Extension", "Commits", "Lines +", "Lines −", "Net"]
+            st.dataframe(df, use_container_width=True, hide_index=True,
+                         height=min(500, 60 + len(fa_list) * 35))
+
+        # --- Export as PDF ---
         st.markdown("#### Export")
         rd = {
             "author": selected, "name": si["name"],
             "owner": owner, "repo": repo, "branch": D["branch"],
             "total_commits": len(ac), "total_additions": ta,
             "total_deletions": td, "net_lines": ta - td,
-            "files_changed": tf, "days_active": days,
+            "files_changed": tf, "unique_files": unique_files,
+            "days_active": days, "avg_per_day": f"{avg_per_day:.2f}",
             "first_date": _fmt(f), "last_date": _fmt(l),
         }
-        html = _gen_author_report(rd, enriched)
-        st.download_button("Download Author Report (HTML)", html,
-                           f"{repo}_{D['branch']}_{selected}_report.html", "text/html")
+        # Build chart images for PDF
+        chart_images = _build_author_chart_images(
+            enriched, ac, cls_counter, ext_counter, top_files, top_churn)
+        with st.spinner("Generating PDF report..."):
+            pdf_bytes = _gen_author_pdf(rd, enriched, file_analysis, chart_images)
+        st.download_button(
+            "Download Author Report (PDF)", pdf_bytes,
+            f"{repo}_{D['branch']}_{selected}_report.pdf",
+            "application/pdf",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1414,6 +1582,57 @@ def page_compliance_hub(D):
 # Report Templates
 # ═══════════════════════════════════════════════════════════════
 
+
+def _gen_compliance_report(D, sections):
+    clsf = Counter(f["classification"] for f in D["files"])
+    classifications = sorted(clsf.items(), key=lambda x: -x[1])
+    languages = sorted(D["languages"].items(), key=lambda x: -x[1])
+
+    authors = []
+    for aid, s in D["author_stats"].items():
+        f, l = s["first"], s["last"]
+        days = (l.date() - f.date()).days + 1 if f and l else 0
+        authors.append({"id": aid, "name": s["name"], "commits": s["commits"],
+                        "first": _fmt(f, "%Y-%m-%d"), "last": _fmt(l, "%Y-%m-%d"), "days": days})
+
+    dated = [c for c in D["commits"] if c["date"]]
+    fd = _fmt(min(c["date"] for c in dated), "%Y-%m-%d") if dated else "\u2014"
+    ld = _fmt(max(c["date"] for c in dated), "%Y-%m-%d") if dated else "\u2014"
+
+    oi = [i for i in D["issues"] if i["state"] == "open"]
+    ci = [i for i in D["issues"] if i["state"] == "closed"]
+    rts = [i["resolution_days"] for i in ci if i["resolution_days"] is not None]
+    ar = f"{sum(rts) / len(rts):.0f} days" if rts else "\u2014"
+
+    audit = []
+    for c in D["commits"]:
+        audit.append({"date": c["date_str"], "type": "Commit",
+                      "author": c["author_id"], "ref": c["sha"], "desc": c["message"]})
+    for i in D["issues"]:
+        audit.append({"date": i["created_str"], "type": "Issue",
+                      "author": i["author"] or "\u2014", "ref": f"#{i['number']}", "desc": i["title"]})
+    for p in D["branch_pulls"]:
+        audit.append({"date": p["created_str"], "type": "PR",
+                      "author": p["author"] or "\u2014", "ref": f"#{p['number']}", "desc": p["title"]})
+    audit.sort(key=lambda x: x["date"], reverse=True)
+
+    return _COMPLIANCE_TPL.render(
+        owner=D["owner"], repo=D["repo"], branch=D["branch"],
+        now=dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        secs=sections, health=_health_score(D),
+        n_commits=len(D["commits"]), n_authors=len(D["author_stats"]),
+        n_files=len(D["files"]), n_files_safe=max(len(D["files"]), 1),
+        n_issues=len(D["issues"]), n_prs=len(D["branch_pulls"]),
+        classifications=classifications,
+        languages=languages, lang_total_safe=max(sum(D["languages"].values()), 1),
+        authors=authors, first_date=fd, last_date=ld,
+        commits_list=D["commits"][:200],
+        prs=D["branch_pulls"], issues_list=D["issues"],
+        n_open_issues=len(oi), n_closed_issues=len(ci),
+        avg_resolution=ar, audit=audit[:500],
+    )
+
+
 _COMPLIANCE_TPL = Template(r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1568,100 +1787,425 @@ Repository: {{ owner }}/{{ repo }} &middot; Branch: {{ branch }}</div>
 </body></html>""")
 
 
-_AUTHOR_TPL = Template(r"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"><title>Author Report</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0b0d13;color:#e2e8f0;line-height:1.6}
-.hdr{background:linear-gradient(135deg,#0f172a,#1e1b4b);padding:32px;border-bottom:2px solid #6366f1}
-.hdr h1{color:#f1f5f9;font-size:1.5rem}.hdr .m{color:#94a3b8;font-size:.85rem;margin-top:4px}
-.ct{max-width:1000px;margin:0 auto;padding:24px}
-.gr{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:20px}
-.cd{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:12px}
-.cd .l{font-size:.7rem;text-transform:uppercase;color:#64748b}.cd .v{font-size:1.1rem;font-weight:700;color:#f1f5f9}
-table{width:100%;border-collapse:collapse;font-size:.82rem}
-th{background:#111827;color:#94a3b8;padding:6px 8px;text-align:left}td{padding:5px 8px;border-bottom:1px solid #0f172a;color:#cbd5e1}
-.ft{text-align:center;padding:20px;color:#475569;font-size:.75rem}
-</style>
-</head><body>
-<div class="hdr"><h1>Contributor Report &middot; {{ r.author }}</h1>
-<div class="m">{{ r.owner }}/{{ r.repo }} &middot; Branch: {{ r.branch }}</div></div>
-<div class="ct">
-<div class="gr">
-<div class="cd"><div class="l">Commits</div><div class="v">{{ r.total_commits }}</div></div>
-<div class="cd"><div class="l">Lines Added</div><div class="v">{{ r.total_additions }}</div></div>
-<div class="cd"><div class="l">Lines Removed</div><div class="v">{{ r.total_deletions }}</div></div>
-<div class="cd"><div class="l">Net Lines</div><div class="v">{{ r.net_lines }}</div></div>
-<div class="cd"><div class="l">Files Touched</div><div class="v">{{ r.files_changed }}</div></div>
-<div class="cd"><div class="l">Days Active</div><div class="v">{{ r.days_active }}</div></div>
-<div class="cd"><div class="l">First Commit</div><div class="v">{{ r.first_date }}</div></div>
-<div class="cd"><div class="l">Last Commit</div><div class="v">{{ r.last_date }}</div></div>
-</div>
-<h3 style="margin:16px 0 8px;color:#f1f5f9;">Commit Details</h3>
-<table><thead><tr><th>SHA</th><th>Date</th><th>Message</th><th>+</th><th>&minus;</th><th>Files</th></tr></thead><tbody>
-{% for c in commits %}
-<tr><td>{{ c.sha }}</td><td>{{ c.date_str }}</td><td>{{ c.message }}</td><td>{{ c.additions }}</td><td>{{ c.deletions }}</td><td>{{ c.file_names }}</td></tr>
-{% endfor %}
-</tbody></table>
-</div>
-<div class="ft">Generated by GitHub PM &middot; {{ r.owner }}/{{ r.repo }}</div>
-</body></html>""")
+_AUTHOR_TPL = None  # PDF-based now; kept as placeholder
+
+def _fig_to_png_bytes(fig, width=700, height=350):
+    """Convert a Plotly figure to PNG bytes for PDF embedding."""
+    try:
+        return fig.to_image(format="png", width=width, height=height,
+                            scale=2, engine="kaleido")
+    except Exception:
+        # Fallback: kaleido not available — skip chart
+        return None
 
 
-def _gen_compliance_report(D, sections):
-    clsf = Counter(f["classification"] for f in D["files"])
-    classifications = sorted(clsf.items(), key=lambda x: -x[1])
-    languages = sorted(D["languages"].items(), key=lambda x: -x[1])
-
-    authors = []
-    for aid, s in D["author_stats"].items():
-        f, l = s["first"], s["last"]
-        days = (l.date() - f.date()).days + 1 if f and l else 0
-        authors.append({"id": aid, "name": s["name"], "commits": s["commits"],
-                        "first": _fmt(f, "%Y-%m-%d"), "last": _fmt(l, "%Y-%m-%d"), "days": days})
-
-    dated = [c for c in D["commits"] if c["date"]]
-    fd = _fmt(min(c["date"] for c in dated), "%Y-%m-%d") if dated else "\u2014"
-    ld = _fmt(max(c["date"] for c in dated), "%Y-%m-%d") if dated else "\u2014"
-
-    oi = [i for i in D["issues"] if i["state"] == "open"]
-    ci = [i for i in D["issues"] if i["state"] == "closed"]
-    rts = [i["resolution_days"] for i in ci if i["resolution_days"] is not None]
-    ar = f"{sum(rts) / len(rts):.0f} days" if rts else "\u2014"
-
-    audit = []
-    for c in D["commits"]:
-        audit.append({"date": c["date_str"], "type": "Commit",
-                      "author": c["author_id"], "ref": c["sha"], "desc": c["message"]})
-    for i in D["issues"]:
-        audit.append({"date": i["created_str"], "type": "Issue",
-                      "author": i["author"] or "\u2014", "ref": f"#{i['number']}", "desc": i["title"]})
-    for p in D["branch_pulls"]:
-        audit.append({"date": p["created_str"], "type": "PR",
-                      "author": p["author"] or "\u2014", "ref": f"#{p['number']}", "desc": p["title"]})
-    audit.sort(key=lambda x: x["date"], reverse=True)
-
-    return _COMPLIANCE_TPL.render(
-        owner=D["owner"], repo=D["repo"], branch=D["branch"],
-        now=dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        secs=sections, health=_health_score(D),
-        n_commits=len(D["commits"]), n_authors=len(D["author_stats"]),
-        n_files=len(D["files"]), n_files_safe=max(len(D["files"]), 1),
-        n_issues=len(D["issues"]), n_prs=len(D["branch_pulls"]),
-        classifications=classifications,
-        languages=languages, lang_total_safe=max(sum(D["languages"].values()), 1),
-        authors=authors, first_date=fd, last_date=ld,
-        commits_list=D["commits"][:200],
-        prs=D["branch_pulls"], issues_list=D["issues"],
-        n_open_issues=len(oi), n_closed_issues=len(ci),
-        avg_resolution=ar, audit=audit[:500],
+def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files, top_churn):
+    """Build chart PNG images for PDF embedding. Returns dict of name->bytes."""
+    charts = {}
+    dark_layout = dict(
+        paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+        font=dict(color="#e2e8f0", size=12),
+        xaxis=dict(gridcolor="#1e293b"), yaxis=dict(gridcolor="#1e293b"),
+        margin=dict(l=60, r=20, t=40, b=60),
     )
+
+    # 1) Daily Activity
+    try:
+        dc = Counter(c["date_day"] for c in ac)
+        if dc:
+            df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
+            fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#6366f1"],
+                         title="Daily Commit Activity")
+            fig.update_layout(**dark_layout, height=350)
+            img = _fig_to_png_bytes(fig)
+            if img:
+                charts["daily_activity"] = img
+    except Exception:
+        pass
+
+    # 2) Code changes per commit
+    try:
+        if enriched:
+            df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
+            df.columns = ["Date", "Additions", "Deletions"]
+            fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
+                         color_discrete_sequence=["#22c55e", "#ef4444"],
+                         title="Code Changes per Commit")
+            fig.update_layout(**dark_layout, height=350)
+            img = _fig_to_png_bytes(fig)
+            if img:
+                charts["code_changes"] = img
+    except Exception:
+        pass
+
+    # 3) File classification pie
+    try:
+        if cls_counter:
+            df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
+            fig = px.pie(df, values="Count", names="Classification",
+                         color_discrete_sequence=px.colors.qualitative.Set2,
+                         hole=0.4, title="Files by Classification")
+            fig.update_layout(**dark_layout, height=400)
+            fig.update_traces(textinfo="label+percent", textfont_size=12)
+            img = _fig_to_png_bytes(fig, 600, 400)
+            if img:
+                charts["file_class_pie"] = img
+    except Exception:
+        pass
+
+    # 4) File extension pie
+    try:
+        if ext_counter:
+            df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
+            fig = px.pie(df, values="Count", names="Extension",
+                         color_discrete_sequence=px.colors.qualitative.Pastel,
+                         hole=0.4, title="Files by Extension")
+            fig.update_layout(**dark_layout, height=400)
+            fig.update_traces(textinfo="label+percent", textfont_size=12)
+            img = _fig_to_png_bytes(fig, 600, 400)
+            if img:
+                charts["file_ext_pie"] = img
+    except Exception:
+        pass
+
+    # 5) Top files by commits
+    try:
+        if top_files:
+            df = pd.DataFrame(top_files)[["filename", "commits"]]
+            df.columns = ["File", "Commits"]
+            df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
+            fig = px.bar(df, x="Commits", y="File", orientation="h",
+                         color_discrete_sequence=["#8b5cf6"],
+                         title="Top Files by Commit Frequency")
+            h = max(350, 40 + len(top_files) * 25)
+            fig.update_layout(**dark_layout, height=h)
+            fig.update_layout(yaxis=dict(autorange="reversed"))
+            img = _fig_to_png_bytes(fig, 700, h)
+            if img:
+                charts["top_files"] = img
+    except Exception:
+        pass
+
+    # 6) Top files by churn
+    try:
+        if top_churn:
+            df = pd.DataFrame(top_churn)
+            df["churn"] = df["additions"] + df["deletions"]
+            df["short"] = df["filename"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
+            fig = px.bar(df, x="churn", y="short", orientation="h",
+                         color="churn", color_continuous_scale="YlOrRd",
+                         title="Top Files by Code Churn (Lines Changed)")
+            h = max(350, 40 + len(top_churn) * 25)
+            fig.update_layout(**dark_layout, height=h, coloraxis_showscale=False)
+            fig.update_layout(yaxis=dict(autorange="reversed"))
+            img = _fig_to_png_bytes(fig, 700, h)
+            if img:
+                charts["top_churn"] = img
+    except Exception:
+        pass
+
+    # 7) Cumulative lines
+    try:
+        if enriched:
+            cum_add, cum_del = 0, 0
+            cum_data = []
+            for c_item in enriched:
+                cum_add += c_item["additions"]
+                cum_del += c_item["deletions"]
+                cum_data.append({"Date": c_item["date_str"], "Added": cum_add,
+                                 "Removed": cum_del, "Net": cum_add - cum_del})
+            df = pd.DataFrame(cum_data)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
+                                     name="Cumulative +", line=dict(color="#22c55e", width=2)))
+            fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
+                                     name="Cumulative −", line=dict(color="#ef4444", width=2)))
+            fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
+                                     name="Net", line=dict(color="#3b82f6", width=2, dash="dot")))
+            fig.update_layout(**dark_layout, height=350, title="Cumulative Lines Over Time")
+            img = _fig_to_png_bytes(fig)
+            if img:
+                charts["cumulative"] = img
+    except Exception:
+        pass
+
+    # 8) Commits by day of week
+    try:
+        if ac:
+            days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
+            df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
+                              columns=["Day", "Commits"])
+            fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f59e0b"],
+                         category_orders={"Day": days_of_week},
+                         title="Commits by Day of Week")
+            fig.update_layout(**dark_layout, height=300)
+            img = _fig_to_png_bytes(fig, 600, 300)
+            if img:
+                charts["day_of_week"] = img
+    except Exception:
+        pass
+
+    # 9) Commit size distribution
+    try:
+        if enriched:
+            sizes = [e["additions"] + e["deletions"] for e in enriched]
+            fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
+                               x="Lines Changed", nbins=30,
+                               color_discrete_sequence=["#6366f1"],
+                               title="Commit Size Distribution")
+            fig.update_layout(**dark_layout, height=300)
+            img = _fig_to_png_bytes(fig, 700, 300)
+            if img:
+                charts["size_dist"] = img
+    except Exception:
+        pass
+
+    return charts
+
+
+def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
+    """Generate a comprehensive author report as PDF bytes."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=15 * mm, bottomMargin=15 * mm,
+    )
+    W = A4[0] - 36 * mm  # usable width
+
+    # Colors
+    BG = HexColor("#0f172a")
+    CARD_BG = HexColor("#111827")
+    BORDER = HexColor("#1e293b")
+    TEXT = HexColor("#e2e8f0")
+    MUTED = HexColor("#94a3b8")
+    ACCENT = HexColor("#6366f1")
+    GREEN = HexColor("#22c55e")
+    RED = HexColor("#ef4444")
+    BLUE = HexColor("#3b82f6")
+    WHITE = HexColor("#f1f5f9")
+
+    # Styles
+    sTitle = ParagraphStyle("Title", fontName="Helvetica-Bold", fontSize=20,
+                            textColor=WHITE, spaceAfter=4)
+    sSub = ParagraphStyle("Sub", fontName="Helvetica", fontSize=10,
+                          textColor=MUTED, spaceAfter=16)
+    sH2 = ParagraphStyle("H2", fontName="Helvetica-Bold", fontSize=14,
+                         textColor=WHITE, spaceBefore=18, spaceAfter=8)
+    sH3 = ParagraphStyle("H3", fontName="Helvetica-Bold", fontSize=11,
+                         textColor=HexColor("#a5b4fc"), spaceBefore=12, spaceAfter=6)
+    sBody = ParagraphStyle("Body", fontName="Helvetica", fontSize=9,
+                           textColor=TEXT, leading=13)
+    sSmall = ParagraphStyle("Small", fontName="Helvetica", fontSize=7.5,
+                            textColor=MUTED, leading=10)
+    sFooter = ParagraphStyle("Footer", fontName="Helvetica", fontSize=7,
+                             textColor=MUTED, alignment=TA_CENTER)
+
+    elements = []
+
+    # ── Title Block ──
+    elements.append(Paragraph(f"Contributor Report — {rd['author']}", sTitle))
+    elements.append(Paragraph(
+        f"{rd['owner']}/{rd['repo']} · Branch: {rd['branch']} · "
+        f"Generated: {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}", sSub))
+
+    # ── KPI Table ──
+    elements.append(Paragraph("Summary Metrics", sH2))
+    kpi_data = [
+        ["Commits", "Lines Added", "Lines Removed", "Net Lines"],
+        [str(rd["total_commits"]), _fnum(rd["total_additions"]),
+         _fnum(rd["total_deletions"]), _fnum(rd["net_lines"])],
+        ["Unique Files", "Days Active", "Avg Commits/Day", "First Commit"],
+        [str(rd["unique_files"]), str(rd["days_active"]),
+         rd["avg_per_day"], rd["first_date"]],
+        ["Last Commit", "Files/Commit", "", ""],
+        [rd["last_date"], f"{rd['files_changed'] / max(rd['total_commits'], 1):.1f}", "", ""],
+    ]
+    kpi_col_w = W / 4
+    kpi_table = Table(kpi_data, colWidths=[kpi_col_w] * 4)
+    kpi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), CARD_BG),
+        ("TEXTCOLOR", (0, 0), (-1, 0), MUTED),
+        ("TEXTCOLOR", (0, 2), (-1, 2), MUTED),
+        ("TEXTCOLOR", (0, 4), (-1, 4), MUTED),
+        ("TEXTCOLOR", (0, 1), (-1, 1), WHITE),
+        ("TEXTCOLOR", (0, 3), (-1, 3), WHITE),
+        ("TEXTCOLOR", (0, 5), (-1, 5), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica"),
+        ("FONTNAME", (0, 2), (-1, 2), "Helvetica"),
+        ("FONTNAME", (0, 4), (-1, 4), "Helvetica"),
+        ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
+        ("FONTNAME", (0, 3), (-1, 3), "Helvetica-Bold"),
+        ("FONTNAME", (0, 5), (-1, 5), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTSIZE", (0, 1), (-1, 1), 12),
+        ("FONTSIZE", (0, 3), (-1, 3), 12),
+        ("FONTSIZE", (0, 5), (-1, 5), 12),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+    ]))
+    elements.append(kpi_table)
+    elements.append(Spacer(1, 10))
+
+    # ── Charts ──
+    chart_order = [
+        ("daily_activity", "Daily Commit Activity"),
+        ("code_changes", "Code Changes per Commit"),
+        ("file_class_pie", "Files by Classification"),
+        ("file_ext_pie", "Files by Extension"),
+        ("top_files", "Top Files by Commit Frequency"),
+        ("top_churn", "Top Files by Code Churn"),
+        ("cumulative", "Cumulative Lines Over Time"),
+        ("day_of_week", "Commits by Day of Week"),
+        ("size_dist", "Commit Size Distribution"),
+    ]
+    for chart_key, chart_title in chart_order:
+        img_bytes = chart_images.get(chart_key)
+        if img_bytes:
+            elements.append(Paragraph(chart_title, sH2))
+            img_stream = io.BytesIO(img_bytes)
+            img = RLImage(img_stream, width=W, height=W * 0.5, kind="proportional")
+            elements.append(img)
+            elements.append(Spacer(1, 8))
+
+    # ── Files Touched Table ──
+    if file_analysis:
+        elements.append(PageBreak())
+        elements.append(Paragraph("All Files Touched by Author", sH2))
+        fa_sorted = sorted(file_analysis.values(), key=lambda x: -x["commits"])
+        file_header = ["File Path", "Category", "Ext", "Commits", "+", "−", "Net"]
+        file_rows = [file_header]
+        for fa in fa_sorted:
+            file_rows.append([
+                Paragraph(fa["filename"], sSmall),
+                fa["classification"],
+                fa["extension"],
+                str(fa["commits"]),
+                str(fa["additions"]),
+                str(fa["deletions"]),
+                str(fa["net"]),
+            ])
+
+        col_widths = [W * 0.35, W * 0.15, W * 0.08, W * 0.1, W * 0.1, W * 0.1, W * 0.1]
+        ft = Table(file_rows, colWidths=col_widths, repeatRows=1)
+        ft.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1e1b4b")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTSIZE", (0, 1), (-1, -1), 7.5),
+            ("TEXTCOLOR", (0, 1), (-1, -1), TEXT),
+            ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
+            ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
+            ("ALIGN", (3, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, HexColor("#0f172a")]),
+        ]))
+        elements.append(ft)
+
+    # ── Full Commit Log ──
+    elements.append(PageBreak())
+    elements.append(Paragraph("Complete Commit History", sH2))
+    elements.append(Paragraph(
+        f"Total {len(enriched)} commits from {rd['first_date']} to {rd['last_date']}", sSub))
+
+    commit_header = ["SHA", "Date", "Message", "+", "−", "Files"]
+    commit_rows = [commit_header]
+    for c in enriched:
+        msg = c["message"]
+        if len(msg) > 80:
+            msg = msg[:77] + "..."
+        commit_rows.append([
+            c["sha"],
+            c["date_str"],
+            Paragraph(msg, sSmall),
+            str(c["additions"]),
+            str(c["deletions"]),
+            str(c["files_changed"]),
+        ])
+
+    cc_widths = [W * 0.08, W * 0.14, W * 0.48, W * 0.08, W * 0.08, W * 0.08]
+    ct = Table(commit_rows, colWidths=cc_widths, repeatRows=1)
+    ct.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1e1b4b")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("FONTSIZE", (0, 1), (-1, -1), 7),
+        ("TEXTCOLOR", (0, 1), (-1, -1), TEXT),
+        ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
+        ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
+        ("ALIGN", (3, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, HexColor("#0f172a")]),
+    ]))
+    elements.append(ct)
+
+    # ── Per-Commit File Details ──
+    elements.append(PageBreak())
+    elements.append(Paragraph("Detailed File Changes per Commit", sH2))
+    for c in enriched:
+        file_detail = c.get("_file_details", [])
+        if not file_detail:
+            continue
+        heading = f'<b>{c["sha"]}</b> — {c["date_str"]} — {c["message"][:60]}'
+        elements.append(Paragraph(heading, sH3))
+        rows = [["File", "Status", "+", "−", "Changes"]]
+        for fd in file_detail:
+            rows.append([
+                Paragraph(fd.get("filename", ""), sSmall),
+                fd.get("status", ""),
+                str(fd.get("additions", 0)),
+                str(fd.get("deletions", 0)),
+                str(fd.get("changes", 0)),
+            ])
+        fd_widths = [W * 0.45, W * 0.12, W * 0.1, W * 0.1, W * 0.1]
+        fdt = Table(rows, colWidths=fd_widths, repeatRows=1)
+        fdt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1e1b4b")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+            ("TEXTCOLOR", (0, 1), (-1, -1), TEXT),
+            ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
+            ("GRID", (0, 0), (-1, -1), 0.3, BORDER),
+            ("ALIGN", (2, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        elements.append(fdt)
+        elements.append(Spacer(1, 6))
+
+    # ── Footer ──
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph(
+        f"Generated by GitHub PM · {rd['owner']}/{rd['repo']} · "
+        f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}", sFooter))
+
+    # Build PDF with dark background
+    def _on_page(canvas, doc):
+        canvas.saveState()
+        canvas.setFillColor(BG)
+        canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
 
 
 def _gen_author_report(rd, commits):
-    return _AUTHOR_TPL.render(r=rd, commits=commits)
+    """Legacy HTML fallback — no longer primary."""
+    return ""
 
 
 # ═══════════════════════════════════════════════════════════════
