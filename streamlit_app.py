@@ -363,15 +363,25 @@ CUSTOM_CSS = """
     /* ─── Select Boxes & Inputs ─── */
     .stSelectbox > div > div,
     .stMultiSelect > div > div,
-    .stTextInput > div > div,
     .stNumberInput > div > div,
     .stDateInput > div > div {
         border-color: #d4cef0 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
     }
-    .stTextInput input {
+    .stTextInput > div > div {
+        border-color: transparent !important;
         border-radius: 10px !important;
+        background: #ffffff !important;
+    }
+    .stTextInput input {
+        border: 1.5px solid #d4cef0 !important;
+        border-radius: 10px !important;
+        background: #ffffff !important;
+    }
+    .stTextInput input:focus {
+        border-color: #7c5cfc !important;
+        box-shadow: 0 0 0 1px #7c5cfc !important;
     }
     .stSelectbox > div > div > div[data-baseweb="select"] span,
     .stSelectbox [data-baseweb="select"] .st-eh,
