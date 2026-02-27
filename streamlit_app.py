@@ -412,7 +412,8 @@ CUSTOM_CSS = """
         border-radius: 24px; border: 1px solid #e4e0f0;
         animation: fadeInUp 0.6s ease both;
     }
-    .hero-welcome .hw-icon { font-size:3.5rem; margin-bottom:16px; }
+    .hero-welcome .hw-icon { margin-bottom:16px; }
+    .hero-welcome .hw-icon img { width:80px; height:80px; object-fit:contain; }
     .hero-welcome .hw-title {
         font-size:2rem; font-weight:800; margin-bottom:8px;
         background: linear-gradient(135deg, #1a1040, #7c5cfc, #2070e0);
@@ -2617,9 +2618,10 @@ def _gen_author_report(rd, commits):
 # ═══════════════════════════════════════════════════════════════
 
 def main():
+    _logo_path = LOGO_PATH if os.path.exists(LOGO_PATH) else "\U0001f6e1\ufe0f"
     st.set_page_config(
         page_title="GAM Software PM \u00b7 ISO 27001",
-        page_icon="\U0001f6e1\ufe0f",
+        page_icon=_logo_path,
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -2703,12 +2705,12 @@ def main():
     # ── Content ──
     D = st.session_state.get("branch_data")
     if not D:
-        st.markdown("""
+        st.markdown(f"""
         <div class="hero-welcome">
-            <div class="hw-icon">\U0001f6e1\ufe0f</div>
+            <div class="hw-icon"><img src="data:image/png;base64,{_inline_logo()}" alt="GAM"></div>
             <div class="hw-title">GAM Software PM</div>
             <div class="hw-sub">
-                ISO 27001 Compliance & Project Management Platform<br>
+                ISO 27001 Compliance &amp; Project Management Platform<br>
                 Paste a GitHub repository URL in the sidebar and click <b>Load</b> to begin.
             </div>
             <div class="hw-tags">
