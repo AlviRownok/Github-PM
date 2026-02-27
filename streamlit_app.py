@@ -1352,6 +1352,7 @@ def page_author_intelligence(D):
             if enriched:
                 df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
                 df.columns = ["Date", "Additions", "Deletions"]
+                df = df.groupby("Date", as_index=False).sum()
                 fig = go.Figure()
                 fig.add_trace(go.Bar(x=df["Date"], y=df["Additions"], name="Additions",
                                      marker_color="#10b981"))
@@ -1369,8 +1370,11 @@ def page_author_intelligence(D):
                 fig = px.pie(df, values="Count", names="Classification",
                              color_discrete_sequence=px.colors.qualitative.Set2,
                              hole=0.4)
-                fig.update_layout(**_plotly_layout(320))
-                fig.update_traces(textinfo="label+percent", textfont_size=11)
+                fig.update_layout(**_plotly_layout(380),
+                                  showlegend=False,
+                                  margin=dict(l=10, r=10, t=28, b=10))
+                fig.update_traces(textinfo="label+percent", textfont_size=10,
+                                  textposition="auto")
                 st.plotly_chart(fig, use_container_width=True, key="ai_cls_pie")
 
         with c4:
@@ -1380,8 +1384,11 @@ def page_author_intelligence(D):
                 fig = px.pie(df, values="Count", names="Extension",
                              color_discrete_sequence=px.colors.qualitative.Pastel,
                              hole=0.4)
-                fig.update_layout(**_plotly_layout(320))
-                fig.update_traces(textinfo="label+percent", textfont_size=11)
+                fig.update_layout(**_plotly_layout(380),
+                                  showlegend=False,
+                                  margin=dict(l=10, r=10, t=28, b=10))
+                fig.update_traces(textinfo="label+percent", textfont_size=10,
+                                  textposition="auto")
                 st.plotly_chart(fig, use_container_width=True, key="ai_ext_pie")
 
         # --- Row 3: Top Files by Commits & Churn ---
@@ -2091,6 +2098,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             return None
         df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
         df.columns = ["Date", "Additions", "Deletions"]
+        df = df.groupby("Date", as_index=False).sum()
         fig = go.Figure()
         fig.add_trace(go.Bar(x=df["Date"], y=df["Additions"], name="Additions",
                              marker_color="#10b981"))
@@ -2249,13 +2257,11 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         canvas.line(L_MARGIN, B_MARGIN - 6 * mm, PW - R_MARGIN, B_MARGIN - 6 * mm)
         # Footer text
         canvas.setFillColor(MUTED)
-        canvas.setFont("Helvetica", 7.5)
-        canvas.drawString(L_MARGIN, B_MARGIN - 10 * mm,
-                          f"GAM Software PM — ISO 27001 Compliance Platform")
-        canvas.drawRightString(PW - R_MARGIN, B_MARGIN - 10 * mm,
-                               f"Page {_page_count[0]}")
-        canvas.drawCentredString(PW / 2, B_MARGIN - 10 * mm,
-                                 f"{rd['owner']}/{rd['repo']} · {rd['branch']}")
+        canvas.setFont("Helvetica", 7)
+        footer_txt = (f"GAM Software PM \u2014 ISO 27001 Compliance Platform  \u00b7  "
+                      f"{rd['owner']}/{rd['repo']} \u00b7 {rd['branch']}  \u00b7  "
+                      f"Page {_page_count[0]}")
+        canvas.drawCentredString(PW / 2, B_MARGIN - 10 * mm, footer_txt)
         canvas.restoreState()
 
     doc = SimpleDocTemplate(
