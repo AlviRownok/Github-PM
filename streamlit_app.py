@@ -1,5 +1,5 @@
 """
-GitHub PM — ISO 27001 Compliance & Project Management Platform
+GAM Software PM — ISO 27001 Compliance & Project Management Platform
 Branch-level software development intelligence, audit documentation,
 and automated project monitoring.
 """
@@ -39,7 +39,7 @@ GITHUB_API = "https://api.github.com"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, "assets")
-LOGO_PATH = os.path.join(ASSETS_DIR, "rpmsoft.png")
+LOGO_PATH = os.path.join(ASSETS_DIR, "GAMspm.png")
 STATE_FILE = os.path.join(BASE_DIR, ".pm_state.json")
 TOKEN_FILE = os.path.join(BASE_DIR, "github_api.txt")
 
@@ -128,67 +128,198 @@ FILE_NAME_PATTERNS = {
 
 CUSTOM_CSS = """
 <style>
-    .stApp { background-color: #0b0d13; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    /* ─── Global / Light Background ─── */
+    .stApp { background-color: #ffffff !important; font-family: 'Inter', sans-serif; }
     .block-container {
         padding-top: 1.5rem !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
         max-width: 100% !important;
     }
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f1117 0%, #0b0d13 100%);
-        border-right: 1px solid #1a1c25;
+    header[data-testid="stHeader"] { background: rgba(255,255,255,0.85) !important; backdrop-filter: blur(12px); }
+
+    /* ─── Animations ─── */
+    @keyframes fadeInUp {
+        from { opacity:0; transform:translateY(18px); }
+        to   { opacity:1; transform:translateY(0); }
     }
+    @keyframes shimmer {
+        0%   { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+    }
+    @keyframes gradientShift {
+        0%, 100% { background-position: 0% 50%; }
+        50%      { background-position: 100% 50%; }
+    }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+
+    /* ─── Sidebar (Deep Indigo-Purple) ─── */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(195deg, #1a1040 0%, #0f0a2e 60%, #120e33 100%) !important;
+        border-right: 1px solid rgba(176,160,240,0.12);
+    }
+    section[data-testid="stSidebar"] * { color: #d4d0f8 !important; }
+    section[data-testid="stSidebar"] .stTextInput > div > div {
+        background: rgba(255,255,255,0.07) !important;
+        border: 1px solid rgba(176,160,240,0.2) !important;
+        border-radius: 10px !important; color: #fff !important;
+    }
+    section[data-testid="stSidebar"] .stTextInput input { color: #fff !important; }
+    section[data-testid="stSidebar"] .stRadio label { color: #c8c2f0 !important; }
+    section[data-testid="stSidebar"] .stRadio label:hover { color: #fff !important; }
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        background: linear-gradient(135deg, #7c5cfc, #b0a0f0) !important;
+        color: #fff !important; border: none !important;
+        border-radius: 10px !important; font-weight: 600 !important;
+        transition: all 0.3s ease;
+    }
+    section[data-testid="stSidebar"] button[kind="primary"]:hover {
+        box-shadow: 0 4px 20px rgba(124,92,252,0.45) !important;
+        transform: translateY(-1px);
+    }
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        background: rgba(255,255,255,0.08) !important;
+        color: #c8c2f0 !important; border: 1px solid rgba(176,160,240,0.25) !important;
+        border-radius: 10px !important;
+    }
+    section[data-testid="stSidebar"] hr { border-color: rgba(176,160,240,0.15) !important; }
+
+    /* ─── Main Content Text ─── */
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: #1a1040 !important; font-family: 'Inter', sans-serif; }
+    .stApp p, .stApp li, .stApp span { color: #374151; }
+
+    /* ─── Metric Cards ─── */
     .metric-row {
-        display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px;
+        display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px;
     }
     .mc {
-        background: linear-gradient(135deg, #111318 0%, #0d0f14 100%);
-        border: 1px solid #1e2028; border-radius: 12px;
-        padding: 16px 20px; flex: 1; min-width: 170px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+        background: #ffffff;
+        border: 1px solid #e4e0f0; border-radius: 14px;
+        padding: 18px 22px; flex: 1; min-width: 170px;
+        box-shadow: 0 2px 12px rgba(124,92,252,0.06);
+        transition: all 0.3s cubic-bezier(.25,.8,.25,1);
+        animation: fadeInUp 0.5s ease both;
     }
-    .mc .lb { font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:#64748b; margin-bottom:4px; font-weight:500; }
-    .mc .vl { font-size:1.35rem; font-weight:700; color:#f1f5f9; }
-    .mc .dl { font-size:.78rem; margin-top:3px; color:#94a3b8; }
+    .mc:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 28px rgba(124,92,252,0.12);
+        border-color: #b0a0f0;
+    }
+    .mc .lb { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:#7c5cfc; margin-bottom:4px; font-weight:600; }
+    .mc .vl { font-size:1.4rem; font-weight:700; color:#1a1040;
+              background: linear-gradient(135deg, #1a1040, #7c5cfc);
+              -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .mc .dl { font-size:.78rem; margin-top:3px; color:#6b7280; }
+
+    /* ─── Section Header ─── */
     .sh {
         display:flex; align-items:center; gap:12px;
-        margin-bottom:20px; padding-bottom:12px;
-        border-bottom:1px solid #1e2028;
+        margin-bottom:22px; padding-bottom:14px;
+        border-bottom: 2px solid transparent;
+        border-image: linear-gradient(90deg, #7c5cfc, #b0a0f0, #70d0f0) 1;
     }
-    .sh .ti { font-size:1.45rem; font-weight:700; color:#f1f5f9; }
+    .sh .ti { font-size:1.5rem; font-weight:700; color:#1a1040 !important; }
     .sh .ib {
-        background:rgba(59,130,246,0.15); color:#60a5fa;
-        padding:4px 10px; border-radius:6px;
+        background: linear-gradient(135deg, rgba(124,92,252,0.12), rgba(176,160,240,0.12));
+        color:#7c5cfc;
+        padding:4px 10px; border-radius:8px;
         font-size:.72rem; font-weight:600; letter-spacing:.03em;
+        border: 1px solid rgba(124,92,252,0.15);
     }
-    .sh .su { font-size:.83rem; color:#64748b; margin-top:3px; }
+    .sh .su { font-size:.83rem; color:#6b7280; margin-top:3px; }
+
+    /* ─── Health Rings ─── */
     .hr { width:120px; height:120px; border-radius:50%;
           display:flex; align-items:center; justify-content:center;
-          font-size:2rem; font-weight:800; margin:0 auto; }
-    .hr-g { border:4px solid #22c55e; color:#22c55e; }
-    .hr-f { border:4px solid #eab308; color:#eab308; }
-    .hr-p { border:4px solid #ef4444; color:#ef4444; }
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg,#111318,#0d0f14);
-        border-radius:12px; padding:12px 16px;
-        border:1px solid #1e2028;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+          font-size:2rem; font-weight:800; margin:0 auto;
+          background: #ffffff;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+          transition: all 0.3s ease;
     }
-    div[data-testid="stMetricLabel"] { color:#64748b; font-size:.76rem; text-transform:uppercase; letter-spacing:.04em; }
-    div[data-testid="stMetricValue"] { color:#f1f5f9; font-size:1.2rem; }
+    .hr:hover { animation: pulse 0.6s ease; }
+    .hr-g { border:4px solid #10b981; color:#10b981; }
+    .hr-f { border:4px solid #f59e0b; color:#f59e0b; }
+    .hr-p { border:4px solid #ef4444; color:#ef4444; }
+
+    /* ─── Streamlit Metric Overrides ─── */
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border-radius:14px; padding:14px 18px;
+        border:1px solid #e4e0f0;
+        box-shadow: 0 2px 12px rgba(124,92,252,0.06);
+        transition: all 0.3s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        box-shadow: 0 6px 24px rgba(124,92,252,0.1);
+        border-color: #b0a0f0;
+    }
+    div[data-testid="stMetricLabel"] { color:#7c5cfc !important; font-size:.76rem; text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
+    div[data-testid="stMetricValue"] { color:#1a1040 !important; font-size:1.2rem; }
+
+    /* ─── Status Badges ─── */
     .sb { display:inline-block; padding:3px 10px; border-radius:20px; font-size:.73rem; font-weight:600; }
-    .sb-g { background:rgba(34,197,94,0.15); color:#22c55e; }
-    .sb-r { background:rgba(239,68,68,0.15); color:#ef4444; }
-    .sb-y { background:rgba(234,179,8,0.15); color:#eab308; }
-    .sb-b { background:rgba(59,130,246,0.15); color:#3b82f6; }
-    .ts-bar { text-align:right; font-size:.73rem; color:#475569; padding:4px 0 14px; }
-    .sidebar-brand { display:flex; align-items:center; gap:10px; padding:8px 0 16px; border-bottom:1px solid #1a1c25; margin-bottom:14px; }
-    .sidebar-brand img { height:36px; border-radius:6px; }
-    .sidebar-brand .n { font-size:1.12rem; font-weight:700; color:#f1f5f9; }
-    .sidebar-brand .t { font-size:.68rem; color:#64748b; }
-    .stPlotlyChart { border:1px solid #1e2028; border-radius:12px; overflow:hidden; }
-    div[data-testid="stDataFrame"] { border:1px solid #1e2028; border-radius:8px; overflow:hidden; }
+    .sb-g { background:rgba(16,185,129,0.1); color:#059669; }
+    .sb-r { background:rgba(239,68,68,0.1); color:#dc2626; }
+    .sb-y { background:rgba(245,158,11,0.1); color:#d97706; }
+    .sb-b { background:rgba(124,92,252,0.1); color:#7c5cfc; }
+
+    /* ─── Timestamp Bar ─── */
+    .ts-bar { text-align:right; font-size:.73rem; color:#9ca3af; padding:4px 0 14px; }
+    .ts-bar a { color:#7c5cfc !important; text-decoration:none; font-weight:500; }
+    .ts-bar a:hover { color:#5b3fd4 !important; }
+
+    /* ─── Sidebar Brand ─── */
+    .sidebar-brand {
+        display:flex; align-items:center; gap:12px; padding:10px 0 18px;
+        border-bottom:1px solid rgba(176,160,240,0.15); margin-bottom:16px;
+    }
+    .sidebar-brand img { height:42px; border-radius:10px; filter: drop-shadow(0 2px 8px rgba(124,92,252,0.3)); }
+    .sidebar-brand .n { font-size:1.15rem; font-weight:700; color:#fff !important;
+                        background: linear-gradient(135deg, #b0a0f0, #70d0f0);
+                        -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .sidebar-brand .t { font-size:.7rem; color:#8b80c8 !important; font-weight:400; }
+
+    /* ─── Charts & DataFrames ─── */
+    .stPlotlyChart { border:1px solid #e4e0f0; border-radius:14px; overflow:hidden;
+                     box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+    div[data-testid="stDataFrame"] { border:1px solid #e4e0f0; border-radius:10px; overflow:hidden; }
+
+    /* ─── Buttons ─── */
+    .stApp button[kind="primary"] {
+        background: linear-gradient(135deg, #7c5cfc, #b0a0f0) !important;
+        color: #fff !important; border: none !important;
+        border-radius: 10px; font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .stApp button[kind="primary"]:hover {
+        box-shadow: 0 4px 18px rgba(124,92,252,0.35);
+        transform: translateY(-1px);
+    }
+
+    /* ─── Expanders & Tabs ─── */
+    .streamlit-expanderHeader { color: #1a1040 !important; font-weight: 600; }
+    .stTabs [data-baseweb="tab"] { color: #6b7280; font-weight: 500; }
+    .stTabs [aria-selected="true"] { color: #7c5cfc !important; border-bottom-color: #7c5cfc !important; }
+
+    /* ─── Welcome Hero Card ─── */
+    .hero-welcome {
+        text-align:center; padding:60px 20px;
+        background: linear-gradient(135deg, rgba(124,92,252,0.04), rgba(176,160,240,0.06), rgba(112,208,240,0.04));
+        border-radius: 24px; border: 1px solid #e4e0f0;
+        animation: fadeInUp 0.6s ease both;
+    }
+    .hero-welcome .hw-icon { font-size:3.5rem; margin-bottom:16px; }
+    .hero-welcome .hw-title {
+        font-size:2rem; font-weight:800; margin-bottom:8px;
+        background: linear-gradient(135deg, #1a1040, #7c5cfc, #2070e0);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-size: 200% auto; animation: gradientShift 4s ease infinite;
+    }
+    .hero-welcome .hw-sub { font-size:1.05rem; color:#6b7280; max-width:640px; margin:0 auto 24px; line-height:1.6; }
+    .hero-welcome .hw-tags { font-size:.85rem; color:#9ca3af; }
+    .hero-welcome .hw-tags b { color: #7c5cfc; font-weight: 600; }
 </style>
 """
 
@@ -259,9 +390,12 @@ def _classify_file(path: str) -> str:
 def _plotly_layout(height=260, **kw):
     base = dict(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#94a3b8", size=11),
-        xaxis=dict(gridcolor="#1e2028"), yaxis=dict(gridcolor="#1e2028"),
+        font=dict(family="Inter, sans-serif", color="#374151", size=11),
+        xaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0", title_font_color="#6b7280"),
+        yaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0", title_font_color="#6b7280"),
         margin=dict(l=0, r=0, t=10, b=0), height=height,
+        colorway=["#7c5cfc", "#2070e0", "#c070e0", "#f0a080", "#70d0f0",
+                  "#10b981", "#f59e0b", "#ef4444", "#b0a0f0"],
     )
     base.update(kw)
     return base
@@ -682,8 +816,8 @@ def page_command_center(D):
         st.markdown(f'''
         <div style="text-align:center;padding:20px;">
             <div class="hr {hcls}">{hs}</div>
-            <div style="margin-top:8px;color:#94a3b8;font-size:.83rem;">Branch Health</div>
-            <div style="font-weight:600;color:#f1f5f9;">{hlbl}</div>
+            <div style="margin-top:8px;color:#6b7280;font-size:.83rem;">Branch Health</div>
+            <div style="font-weight:600;color:#1a1040;">{hlbl}</div>
         </div>''', unsafe_allow_html=True)
 
     with c2:
@@ -715,7 +849,7 @@ def page_command_center(D):
         df = pd.DataFrame(D["weekly_activity"])
         fig = px.area(df, x="week", y="total",
                       labels={"week": "Week", "total": "Commits"},
-                      color_discrete_sequence=["#3b82f6"])
+                      color_discrete_sequence=["#7c5cfc"])
         fig.update_layout(**_plotly_layout(250))
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -799,7 +933,7 @@ def page_asset_inventory(D):
     top_e = exts.most_common(15)
     if top_e:
         df_e = pd.DataFrame(top_e, columns=["Extension", "Count"])
-        fig = px.bar(df_e, x="Extension", y="Count", color_discrete_sequence=["#3b82f6"])
+        fig = px.bar(df_e, x="Extension", y="Count", color_discrete_sequence=["#2070e0"])
         fig.update_layout(**_plotly_layout(240))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -842,7 +976,7 @@ def page_change_ledger(D):
     st.markdown("#### Change Frequency")
     if day_counts:
         df = pd.DataFrame(sorted(day_counts.items()), columns=["Date", "Changes"])
-        fig = px.bar(df, x="Date", y="Changes", color_discrete_sequence=["#6366f1"])
+        fig = px.bar(df, x="Date", y="Changes", color_discrete_sequence=["#7c5cfc"])
         fig.update_layout(**_plotly_layout(250))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -850,7 +984,7 @@ def page_change_ledger(D):
     ac = Counter(c["author_id"] for c in commits)
     if ac:
         df = pd.DataFrame(ac.most_common(), columns=["Author", "Commits"])
-        fig = px.bar(df, x="Author", y="Commits", color_discrete_sequence=["#22c55e"])
+        fig = px.bar(df, x="Author", y="Commits", color_discrete_sequence=["#2070e0"])
         fig.update_layout(**_plotly_layout(250))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -989,8 +1123,8 @@ def page_incident_log(D):
         fig = px.histogram(pd.DataFrame({"Days": rts}), x="Days", nbins=20,
                            color_discrete_sequence=["#06b6d4"])
         fig.update_layout(**_plotly_layout(240,
-                          xaxis=dict(gridcolor="#1e2028", title="Days to Resolution"),
-                          yaxis=dict(gridcolor="#1e2028", title="Count")))
+                          xaxis=dict(gridcolor="#f0eeff", title="Days to Resolution"),
+                          yaxis=dict(gridcolor="#f0eeff", title="Count")))
         st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1139,7 +1273,7 @@ def page_author_intelligence(D):
             dc = Counter(c["date_day"] for c in ac)
             if dc:
                 df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
-                fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#6366f1"])
+                fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
                 fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, use_container_width=True, key="ai_daily")
 
@@ -1149,7 +1283,7 @@ def page_author_intelligence(D):
                 df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
                 df.columns = ["Date", "Additions", "Deletions"]
                 fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
-                             color_discrete_sequence=["#22c55e", "#ef4444"])
+                             color_discrete_sequence=["#10b981", "#ef4444"])
                 fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, use_container_width=True, key="ai_changes")
 
@@ -1186,7 +1320,7 @@ def page_author_intelligence(D):
                 df.columns = ["File", "Commits", "Lines +", "Lines −"]
                 df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
                 fig = px.bar(df, x="Commits", y="File", orientation="h",
-                             color_discrete_sequence=["#8b5cf6"])
+                             color_discrete_sequence=["#c070e0"])
                 fig.update_layout(**_plotly_layout(min(380, 40 + len(top_files) * 22)))
                 fig.update_layout(yaxis=dict(autorange="reversed"))
                 st.plotly_chart(fig, use_container_width=True, key="ai_topfiles")
@@ -1218,11 +1352,11 @@ def page_author_intelligence(D):
                 df = pd.DataFrame(cum_data)
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
-                                         name="Cumulative +", line=dict(color="#22c55e", width=2)))
+                                         name="Cumulative +", line=dict(color="#10b981", width=2)))
                 fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
                                          name="Cumulative −", line=dict(color="#ef4444", width=2)))
                 fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
-                                         name="Net", line=dict(color="#3b82f6", width=2, dash="dot")))
+                                         name="Net", line=dict(color="#7c5cfc", width=2, dash="dot")))
                 fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, use_container_width=True, key="ai_cumulative")
 
@@ -1233,7 +1367,7 @@ def page_author_intelligence(D):
                 dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
                 df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
                                   columns=["Day", "Commits"])
-                fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f59e0b"],
+                fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f0a080"],
                              category_orders={"Day": days_of_week})
                 fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, use_container_width=True, key="ai_dow")
@@ -1244,7 +1378,7 @@ def page_author_intelligence(D):
             sizes = [e["additions"] + e["deletions"] for e in enriched]
             fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
                                x="Lines Changed", nbins=30,
-                               color_discrete_sequence=["#6366f1"])
+                               color_discrete_sequence=["#7c5cfc"])
             fig.update_layout(**_plotly_layout(250))
             st.plotly_chart(fig, use_container_width=True, key="ai_sizedist")
 
@@ -1496,8 +1630,8 @@ def _render_gantt(df, start, end, extensions):
 
     fig.update_layout(
         height=min(900, 140 + 28 * len(df)),
-        paper_bgcolor="#0b0d13", plot_bgcolor="#0b0d13",
-        font=dict(color="#94a3b8"),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#374151"),
         margin=dict(l=10, r=10, t=40, b=10),
     )
 
@@ -1507,7 +1641,7 @@ def _render_gantt(df, start, end, extensions):
     for d in sorted({d for d in extensions if isinstance(d, dt.date)}):
         fig.add_vline(
             x=dt.datetime.combine(d + dt.timedelta(days=1), dt.time(0)),
-            line_width=1, line_dash="dot", line_color="#f59e0b",
+            line_width=1, line_dash="dot", line_color="#f0a080",
         )
 
     fig.add_vrect(x0=end_dt, x1=x1, fillcolor="rgba(239,68,68,0.08)",
@@ -1657,26 +1791,26 @@ _COMPLIANCE_TPL = Template(r"""<!DOCTYPE html>
 <title>ISO 27001 Compliance Report</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0b0d13;color:#e2e8f0;line-height:1.7}
-.hdr{background:linear-gradient(135deg,#0f172a,#1e1b4b);padding:40px;border-bottom:2px solid #3b82f6}
-.hdr h1{font-size:1.8rem;color:#f1f5f9;margin-bottom:8px}
-.hdr .m{color:#94a3b8;font-size:.9rem}
-.hdr .b{display:inline-block;background:rgba(59,130,246,0.2);color:#60a5fa;padding:4px 12px;border-radius:4px;font-size:.8rem;font-weight:600;margin-top:8px}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#ffffff;color:#374151;line-height:1.7}
+.hdr{background:linear-gradient(135deg,#1a1040,#7c5cfc);padding:40px;border-bottom:2px solid #b0a0f0}
+.hdr h1{font-size:1.8rem;color:#ffffff;margin-bottom:8px}
+.hdr .m{color:#d4d0f8;font-size:.9rem}
+.hdr .b{display:inline-block;background:rgba(176,160,240,0.25);color:#ffffff;padding:4px 12px;border-radius:4px;font-size:.8rem;font-weight:600;margin-top:8px}
 .ct{max-width:1100px;margin:0 auto;padding:32px 24px}
 .sec{margin-bottom:40px;page-break-inside:avoid}
-.sec h2{font-size:1.3rem;color:#f1f5f9;border-bottom:1px solid #1e293b;padding-bottom:8px;margin-bottom:16px}
-.sec h3{font-size:1rem;color:#cbd5e1;margin:16px 0 8px}
-.it{background:rgba(59,130,246,0.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600;margin-left:8px}
+.sec h2{font-size:1.3rem;color:#1a1040;border-bottom:1px solid #e4e0f0;padding-bottom:8px;margin-bottom:16px}
+.sec h3{font-size:1rem;color:#374151;margin:16px 0 8px}
+.it{background:rgba(124,92,252,0.1);color:#7c5cfc;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600;margin-left:8px}
 .gr{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
-.cd{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:14px}
-.cd .l{font-size:.75rem;text-transform:uppercase;color:#64748b;letter-spacing:.05em}
-.cd .v{font-size:1.2rem;font-weight:700;color:#f1f5f9;margin-top:4px}
+.cd{background:#faf9ff;border:1px solid #e4e0f0;border-radius:8px;padding:14px}
+.cd .l{font-size:.75rem;text-transform:uppercase;color:#7c5cfc;letter-spacing:.05em}
+.cd .v{font-size:1.2rem;font-weight:700;color:#1a1040;margin-top:4px}
 table{width:100%;border-collapse:collapse;margin-top:8px;font-size:.85rem}
-th{background:#111827;color:#94a3b8;padding:8px 10px;text-align:left;font-weight:600;border-bottom:1px solid #1e293b}
-td{padding:6px 10px;border-bottom:1px solid #0f172a;color:#cbd5e1}
-tr:nth-child(even) td{background:rgba(15,23,42,0.5)}
-.ft{text-align:center;padding:24px;color:#475569;font-size:.8rem;border-top:1px solid #1e293b;margin-top:40px}
-@media print{body{background:#fff;color:#1e293b}.hdr{background:#f8fafc;border-color:#3b82f6}.hdr h1{color:#0f172a}.cd{border-color:#e2e8f0}th{background:#f1f5f9;color:#475569}td{color:#334155;border-color:#e2e8f0}}
+th{background:#faf9ff;color:#7c5cfc;padding:8px 10px;text-align:left;font-weight:600;border-bottom:1px solid #e4e0f0}
+td{padding:6px 10px;border-bottom:1px solid #f0eeff;color:#374151}
+tr:nth-child(even) td{background:#faf9ff}
+.ft{text-align:center;padding:24px;color:#9ca3af;font-size:.8rem;border-top:1px solid #e4e0f0;margin-top:40px}
+@media print{body{background:#fff;color:#1e293b}.hdr{background:linear-gradient(135deg,#1a1040,#7c5cfc);border-color:#b0a0f0}.hdr h1{color:#fff}.cd{border-color:#e4e0f0}th{background:#faf9ff;color:#7c5cfc}td{color:#374151;border-color:#e4e0f0}}
 </style>
 </head>
 <body>
@@ -1748,7 +1882,7 @@ Generated: {{ now }} &middot; Scope: Branch-level software development audit</di
 <tr><td><code>{{ c.sha }}</code></td><td>{{ c.date_str }}</td><td>{{ c.author_id }}</td><td>{{ c.message }}</td></tr>
 {% endfor %}
 </tbody></table>
-{% if n_commits > 200 %}<p style="color:#64748b;margin-top:8px;">Showing first 200 of {{ n_commits }} changes.</p>{% endif %}
+{% if n_commits > 200 %}<p style="color:#9ca3af;margin-top:8px;">Showing first 200 of {{ n_commits }} changes.</p>{% endif %}
 </div>
 {% endif %}
 
@@ -1762,7 +1896,7 @@ Generated: {{ now }} &middot; Scope: Branch-level software development audit</di
 <tr><td>{{ p.number }}</td><td>{{ p.title }}</td><td>{{ p.state }}</td><td>{{ p.author }}</td><td>{{ p.head }}</td><td>{{ p.base }}</td><td>{{ p.created_str }}</td><td>{{ p.merged_str }}</td></tr>
 {% endfor %}
 </tbody></table>
-{% else %}<p style="color:#64748b;">No branch-related pull requests found.</p>{% endif %}
+{% else %}<p style="color:#9ca3af;">No branch-related pull requests found.</p>{% endif %}
 </div>
 {% endif %}
 
@@ -1782,7 +1916,7 @@ Generated: {{ now }} &middot; Scope: Branch-level software development audit</di
 <tr><td>{{ i.number }}</td><td>{{ i.title }}</td><td>{{ i.state }}</td><td>{{ i.author or '&mdash;' }}</td><td>{{ i.assignee or '&mdash;' }}</td><td>{{ i.labels_str }}</td><td>{{ i.created_str }}</td><td>{{ i.closed_str }}</td><td>{{ i.resolution_days if i.resolution_days is not none else '&mdash;' }}</td></tr>
 {% endfor %}
 </tbody></table>
-{% else %}<p style="color:#64748b;">No issues found.</p>{% endif %}
+{% else %}<p style="color:#9ca3af;">No issues found.</p>{% endif %}
 </div>
 {% endif %}
 
@@ -1799,7 +1933,7 @@ Generated: {{ now }} &middot; Scope: Branch-level software development audit</di
 {% endif %}
 
 </div>
-<div class="ft">ISO 27001 Compliance Report &middot; Generated by GitHub PM &middot; {{ now }}<br>
+<div class="ft">ISO 27001 Compliance Report &middot; Generated by GAM Software PM &middot; {{ now }}<br>
 Repository: {{ owner }}/{{ repo }} &middot; Branch: {{ branch }}</div>
 </body></html>""")
 
@@ -1815,16 +1949,18 @@ def _fig_to_png_bytes(fig, width=800, height=400):
 
 
 def _chart_layout(title="", height=400):
-    """Consistent dark chart layout for PDF export."""
+    """Consistent light chart layout for PDF export."""
     return dict(
-        paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
-        font=dict(family="Arial, Helvetica, sans-serif", color="#e2e8f0", size=13),
-        xaxis=dict(gridcolor="#1e293b", title_font_size=12, tickfont_size=11),
-        yaxis=dict(gridcolor="#1e293b", title_font_size=12, tickfont_size=11),
+        paper_bgcolor="#ffffff", plot_bgcolor="#faf9ff",
+        font=dict(family="Helvetica, Arial, sans-serif", color="#374151", size=13),
+        xaxis=dict(gridcolor="#e4e0f0", title_font_size=12, tickfont_size=11, linecolor="#d1cde0"),
+        yaxis=dict(gridcolor="#e4e0f0", title_font_size=12, tickfont_size=11, linecolor="#d1cde0"),
         margin=dict(l=65, r=30, t=50, b=65),
-        title=dict(text=title, font=dict(size=16, color="#f1f5f9"), x=0.5, xanchor="center"),
+        title=dict(text=title, font=dict(size=16, color="#1a1040"), x=0.5, xanchor="center"),
         height=height,
-        legend=dict(font=dict(size=11)),
+        legend=dict(font=dict(size=11, color="#374151")),
+        colorway=["#7c5cfc", "#2070e0", "#c070e0", "#f0a080", "#70d0f0",
+                  "#10b981", "#f59e0b", "#ef4444"],
     )
 
 
@@ -1837,7 +1973,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         dc = Counter(c["date_day"] for c in ac)
         if dc:
             df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
-            fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#6366f1"])
+            fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
             fig.update_layout(**_chart_layout("Daily Commit Activity", 400))
             img = _fig_to_png_bytes(fig, 900, 400)
             if img:
@@ -1851,7 +1987,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
             df.columns = ["Date", "Additions", "Deletions"]
             fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
-                         color_discrete_sequence=["#22c55e", "#ef4444"])
+                         color_discrete_sequence=["#10b981", "#ef4444"])
             fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
             img = _fig_to_png_bytes(fig, 900, 400)
             if img:
@@ -1894,7 +2030,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df.columns = ["File", "Commits"]
             df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
             fig = px.bar(df, x="Commits", y="File", orientation="h",
-                         color_discrete_sequence=["#8b5cf6"])
+                         color_discrete_sequence=["#c070e0"])
             h = max(400, 60 + len(top_files) * 28)
             fig.update_layout(**_chart_layout("Top Files by Commit Frequency", h))
             fig.update_layout(yaxis=dict(autorange="reversed"))
@@ -1934,11 +2070,11 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df = pd.DataFrame(cum_data)
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
-                                     name="Cumulative +", line=dict(color="#22c55e", width=2.5)))
+                                     name="Cumulative +", line=dict(color="#10b981", width=2.5)))
             fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
                                      name="Cumulative −", line=dict(color="#ef4444", width=2.5)))
             fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
-                                     name="Net", line=dict(color="#3b82f6", width=2.5, dash="dot")))
+                                     name="Net", line=dict(color="#7c5cfc", width=2.5, dash="dot")))
             fig.update_layout(**_chart_layout("Cumulative Lines Over Time", 400))
             img = _fig_to_png_bytes(fig, 900, 400)
             if img:
@@ -1953,7 +2089,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
             df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
                               columns=["Day", "Commits"])
-            fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f59e0b"],
+            fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f0a080"],
                          category_orders={"Day": days_of_week})
             fig.update_layout(**_chart_layout("Commits by Day of Week", 380))
             img = _fig_to_png_bytes(fig, 750, 380)
@@ -1968,7 +2104,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             sizes = [e["additions"] + e["deletions"] for e in enriched]
             fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
                                x="Lines Changed", nbins=30,
-                               color_discrete_sequence=["#6366f1"])
+                               color_discrete_sequence=["#7c5cfc"])
             fig.update_layout(**_chart_layout("Commit Size Distribution", 380))
             img = _fig_to_png_bytes(fig, 900, 380)
             if img:
@@ -1984,14 +2120,14 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
     buf = io.BytesIO()
 
     # Colors
-    BG = HexColor("#0f172a")
-    CARD_BG = HexColor("#111827")
-    BORDER = HexColor("#1e293b")
-    TEXT = HexColor("#e2e8f0")
-    MUTED = HexColor("#94a3b8")
-    ACCENT = HexColor("#6366f1")
-    WHITE = HexColor("#f1f5f9")
-    HEADER_BG = HexColor("#1e1b4b")
+    BG = HexColor("#ffffff")
+    CARD_BG = HexColor("#faf9ff")
+    BORDER = HexColor("#e4e0f0")
+    TEXT = HexColor("#374151")
+    MUTED = HexColor("#6b7280")
+    ACCENT = HexColor("#7c5cfc")
+    WHITE = HexColor("#1a1040")
+    HEADER_BG = HexColor("#7c5cfc")
 
     # Page dimensions
     PW, PH = A4
@@ -2021,7 +2157,7 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         canvas.setFillColor(MUTED)
         canvas.setFont("Helvetica", 7.5)
         canvas.drawString(L_MARGIN, B_MARGIN - 10 * mm,
-                          f"GitHub PM — ISO 27001 Compliance Platform")
+                          f"GAM Software PM — ISO 27001 Compliance Platform")
         canvas.drawRightString(PW - R_MARGIN, B_MARGIN - 10 * mm,
                                f"Page {_page_count[0]}")
         canvas.drawCentredString(PW / 2, B_MARGIN - 10 * mm,
@@ -2297,7 +2433,7 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         textColor=MUTED, alignment=TA_CENTER, leading=14)))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        f"Generated by GitHub PM · ISO 27001 Compliance Platform · "
+        f"Generated by GAM Software PM · ISO 27001 Compliance Platform · "
         f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}", sFooter))
 
     doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
@@ -2315,7 +2451,7 @@ def _gen_author_report(rd, commits):
 
 def main():
     st.set_page_config(
-        page_title="GitHub PM \u00b7 ISO 27001",
+        page_title="GAM Software PM \u00b7 ISO 27001",
         page_icon="\U0001f6e1\ufe0f",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -2329,11 +2465,11 @@ def main():
             st.markdown(f'''
             <div class="sidebar-brand">
                 <img src="data:image/png;base64,{logo}" alt="">
-                <div><div class="n">GitHub PM</div>
+                <div><div class="n">GAM Software PM</div>
                 <div class="t">ISO 27001 Compliance Platform</div></div>
             </div>''', unsafe_allow_html=True)
         else:
-            st.markdown("### GitHub PM")
+            st.markdown("### GAM Software PM")
             st.caption("ISO 27001 Compliance Platform")
 
         st.markdown("")
@@ -2401,15 +2537,18 @@ def main():
     D = st.session_state.get("branch_data")
     if not D:
         st.markdown("""
-        <div style="text-align:center;padding:100px 20px;">
-            <div style="font-size:3.5rem;margin-bottom:16px;">\U0001f6e1\ufe0f</div>
-            <div style="font-size:1.8rem;font-weight:700;color:#f1f5f9;margin-bottom:8px;">GitHub PM</div>
-            <div style="font-size:1.05rem;color:#64748b;max-width:640px;margin:0 auto 24px;">
+        <div class="hero-welcome">
+            <div class="hw-icon">\U0001f6e1\ufe0f</div>
+            <div class="hw-title">GAM Software PM</div>
+            <div class="hw-sub">
                 ISO 27001 Compliance & Project Management Platform<br>
-                Paste a GitHub repository URL in the sidebar and click <strong>Load</strong> to begin.
+                Paste a GitHub repository URL in the sidebar and click <b>Load</b> to begin.
             </div>
-            <div style="font-size:.85rem;color:#475569;">
-                Branch-level intelligence &middot; Asset inventory &middot; Change management &middot; Audit documentation
+            <div class="hw-tags">
+                <b>Branch-level intelligence</b> &middot;
+                <b>Asset inventory</b> &middot;
+                <b>Change management</b> &middot;
+                <b>Audit documentation</b>
             </div>
         </div>""", unsafe_allow_html=True)
         return
@@ -2417,7 +2556,7 @@ def main():
     st.markdown(
         f'<div class="ts-bar">Data fetched {_fmt(D["fetched_at"], "%Y-%m-%d %H:%M:%S UTC")} \u00b7 '
         f'Auto-refresh: {CACHE_TTL}s \u00b7 '
-        f'<a href="{D["repo_url"]}" target="_blank" style="color:#3b82f6;">Open on GitHub \u2197</a></div>',
+        f'<a href="{D["repo_url"]}" target="_blank">Open on GitHub \u2197</a></div>',
         unsafe_allow_html=True,
     )
 
