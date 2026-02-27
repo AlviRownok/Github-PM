@@ -26,14 +26,49 @@ from jinja2 import Template
 load_dotenv()
 
 GITHUB_API = "https://api.github.com"
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 LOGO_PATH = os.path.join(ASSETS_DIR, "rpmsoft.png")
 STATE_FILE = os.path.join(BASE_DIR, ".pm_state.json")
+TOKEN_FILE = os.path.join(BASE_DIR, "github_api.txt")
 
 CACHE_TTL = 300  # seconds
+
+
+def _resolve_token() -> str | None:
+    """Load GitHub token from multiple sources (priority order):
+    1. Streamlit Cloud Secrets  (st.secrets["GITHUB_TOKEN"])
+    2. Environment variable     (GITHUB_TOKEN env var / .env file)
+    3. github_api.txt file      (local fallback)
+    """
+    # 1) Streamlit Secrets
+    try:
+        tok = st.secrets.get("GITHUB_TOKEN")
+        if tok and str(tok).strip():
+            return str(tok).strip()
+    except Exception:
+        pass
+
+    # 2) Environment variable (set by .env or system)
+    tok = os.getenv("GITHUB_TOKEN")
+    if tok and tok.strip():
+        return tok.strip()
+
+    # 3) Local file fallback
+    try:
+        if os.path.exists(TOKEN_FILE):
+            with open(TOKEN_FILE, "r") as f:
+                tok = f.read().strip()
+                if tok:
+                    return tok
+    except Exception:
+        pass
+
+    return None
+
+
+GITHUB_TOKEN = _resolve_token()
 
 NAV_SECTIONS = [
     "📊 Command Center",
@@ -323,11 +358,23 @@ def _fetch_milestones(owner, repo):
 def collect_branch_data(owner, repo, branch):
     """Master data collection for a single branch."""
     repo_info = _fetch_repo(owner, repo)
+    if not repo_info or not repo_info.get("full_name"):
+        raise RuntimeError(
+            f"Repository '{owner}/{repo}' not found or not accessible. "
+            "Check the URL and ensure your token has access to this repository."
+        )
     default_branch = repo_info.get("default_branch", "main")
 
     # Branches
     branches_raw = _fetch_branches(owner, repo)
     branch_names = [b.get("name") for b in branches_raw if b.get("name")]
+
+    # Validate the requested branch exists
+    if branch_names and branch not in branch_names:
+        raise RuntimeError(
+            f"Branch '{branch}' not found in {owner}/{repo}. "
+            f"Available branches: {', '.join(branch_names[:15])}"
+        )
 
     # Commits
     all_commits = _fetch_commits(owner, repo, branch)
@@ -1665,6 +1712,13 @@ def main():
 
         st.markdown("---")
 
+        # Token status indicator
+        if GITHUB_TOKEN:
+            _tok_preview = GITHUB_TOKEN[:8] + "..." + GITHUB_TOKEN[-4:]
+            st.caption(f"🟢 API Token loaded (`{_tok_preview}`)")
+        else:
+            st.caption("🔴 No API token — unauthenticated (60 req/hr limit)")
+
         if "branch_data" in st.session_state and st.session_state.branch_data:
             d = st.session_state.branch_data
             st.caption(f"**{d['owner']}/{d['repo']}**")
@@ -1679,6 +1733,11 @@ def main():
             st.session_state.repo_url = repo_url
             if not branch_hint:
                 info = _fetch_repo(owner, repo)
+                if not info or not info.get("default_branch"):
+                    raise RuntimeError(
+                        f"Repository '{owner}/{repo}' not found or not accessible. "
+                        "Check the URL and ensure your token has access."
+                    )
                 branch_hint = info.get("default_branch", "main")
             with st.spinner(f"Loading {owner}/{repo} @ {branch_hint}..."):
                 if refresh_btn:
