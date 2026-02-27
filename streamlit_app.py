@@ -544,6 +544,66 @@ def _gh_get(path: str, params=None):
     return resp.json()
 
 
+def _gh_put(path: str, payload: dict):
+    """Create or update a file via the GitHub Contents API (PUT)."""
+    resp = requests.put(f"{GITHUB_API}{path}", headers=_gh_headers(),
+                        json=payload, timeout=30)
+    if resp.status_code >= 400:
+        try:
+            msg = resp.json().get("message", f"HTTP {resp.status_code}")
+        except Exception:
+            msg = f"HTTP {resp.status_code}"
+        raise RuntimeError(f"GitHub API {resp.status_code}: {msg}")
+    return resp.json()
+
+
+# ── Timeline CSV helpers (GitHub-backed persistence) ──
+
+_TIMELINE_DIR = ".gam-pm"
+
+
+def _timeline_path(owner, repo, branch):
+    safe_branch = branch.replace("/", "_")
+    return f"{_TIMELINE_DIR}/timeline_{safe_branch}.csv"
+
+
+def _read_timeline_csv(owner, repo, branch):
+    """Read the timeline CSV from GitHub. Returns (rows_list, sha_of_file)."""
+    fpath = _timeline_path(owner, repo, branch)
+    data = _gh_get(f"/repos/{owner}/{repo}/contents/{fpath}", {"ref": branch})
+    if not data or "content" not in data:
+        return [], None
+    content = base64.b64decode(data["content"]).decode("utf-8")
+    sha = data.get("sha")
+    rows = []
+    import csv as _csv
+    reader = _csv.DictReader(io.StringIO(content))
+    for r in reader:
+        rows.append(dict(r))
+    return rows, sha
+
+
+def _write_timeline_csv(owner, repo, branch, rows, file_sha=None):
+    """Write the timeline CSV to GitHub via the Contents API."""
+    import csv as _csv
+    buf = io.StringIO()
+    fieldnames = ["type", "date", "reason", "created_at"]
+    writer = _csv.DictWriter(buf, fieldnames=fieldnames)
+    writer.writeheader()
+    for r in rows:
+        writer.writerow({k: r.get(k, "") for k in fieldnames})
+    encoded = base64.b64encode(buf.getvalue().encode("utf-8")).decode("utf-8")
+    fpath = _timeline_path(owner, repo, branch)
+    payload = {
+        "message": f"[GAM-PM] Update project timeline ({branch})",
+        "content": encoded,
+        "branch": branch,
+    }
+    if file_sha:
+        payload["sha"] = file_sha
+    return _gh_put(f"/repos/{owner}/{repo}/contents/{fpath}", payload)
+
+
 def _gh_paginated(path: str, params=None, max_pages=10):
     params = dict(params or {})
     params.setdefault("per_page", 100)
@@ -1582,228 +1642,262 @@ def page_author_intelligence(D):
 
 def page_project_timeline(D):
     _section_hdr("Project Timeline",
-                 "Gantt chart, milestone tracking and activity management")
+                 "Deadline tracking with GitHub-backed CSV persistence")
 
     owner, repo, branch = D["owner"], D["repo"], D["branch"]
-    rk = _rk(owner, repo, branch)
-    saved = _load_pm(rk)
 
-    # Dates
-    c1, c2 = st.columns(2)
-    with c1:
-        sd = saved.get("project_start")
+    # ── Load existing timeline from GitHub ──
+    if "tl_rows" not in st.session_state or st.session_state.get("tl_key") != f"{owner}/{repo}@{branch}":
         try:
-            sd = dt.date.fromisoformat(sd)
+            rows, sha = _read_timeline_csv(owner, repo, branch)
         except Exception:
-            sd = dt.date.today() - dt.timedelta(days=30)
-        pstart = st.date_input("Project Start Date", value=sd)
-    with c2:
-        ed = saved.get("project_end")
-        try:
-            ed = dt.date.fromisoformat(ed)
-        except Exception:
-            ed = dt.date.today() + dt.timedelta(days=30)
-        pend = st.date_input("Project End Date", value=ed)
+            rows, sha = [], None
+        st.session_state.tl_rows = rows
+        st.session_state.tl_sha = sha
+        st.session_state.tl_key = f"{owner}/{repo}@{branch}"
 
-    # Extensions
-    st.markdown("#### Deadline Extensions")
-    if "pm_ext" not in st.session_state:
-        st.session_state.pm_ext = {}
-    if rk not in st.session_state.pm_ext:
-        pe = []
-        for x in saved.get("extensions", []):
+    rows = st.session_state.tl_rows
+    sha = st.session_state.tl_sha
+
+    # Extract current data
+    initial_row = next((r for r in rows if r.get("type") == "initial"), None)
+    extensions = [r for r in rows if r.get("type") == "extension"]
+
+    # ── 1. Initial Deadline ──
+    st.markdown("#### Initial Deadline")
+    init_date_val = None
+    if initial_row:
+        try:
+            init_date_val = dt.date.fromisoformat(initial_row["date"])
+        except Exception:
+            pass
+
+    ic1, ic2 = st.columns([2, 1])
+    with ic1:
+        init_date = st.date_input(
+            "Project Deadline",
+            value=init_date_val,
+            help="The original project delivery deadline",
+            key="tl_init_date",
+        )
+    with ic2:
+        st.markdown("")
+        st.markdown("")
+        if st.button("Set Initial Deadline", type="primary", key="tl_set_init"):
+            # Remove any old initial row, add new one
+            new_rows = [r for r in rows if r.get("type") != "initial"]
+            new_rows.insert(0, {
+                "type": "initial",
+                "date": init_date.isoformat(),
+                "reason": "Original project deadline",
+                "created_at": dt.datetime.utcnow().isoformat(),
+            })
             try:
-                pe.append(dt.date.fromisoformat(x))
-            except Exception:
-                pass
-        st.session_state.pm_ext[rk] = pe
+                resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
+                st.session_state.tl_rows = new_rows
+                st.session_state.tl_sha = resp.get("content", {}).get("sha")
+                st.success("Initial deadline saved to GitHub.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to save: {e}")
 
-    ec1, ec2, ec3 = st.columns([1, 1, 2])
-    with ec1:
-        ne = st.date_input("New Extension", value=dt.date.today(), key="ext_new")
-    with ec2:
-        st.markdown("")
-        st.markdown("")
-        if st.button("Add Extension"):
-            st.session_state.pm_ext[rk].append(ne)
-    with ec3:
-        if st.session_state.pm_ext[rk]:
-            st.info("Extensions: " + ", ".join(d.isoformat() for d in st.session_state.pm_ext[rk]))
-            if st.button("Clear Extensions"):
-                st.session_state.pm_ext[rk] = []
+    if initial_row:
+        st.caption(f"Current deadline: **{initial_row['date']}**")
 
-    st.markdown("")
+    st.markdown("---")
 
-    # Activity table
-    st.markdown("#### Activity Log")
-    rows = []
-    for c in D["commits"]:
-        rows.append({
-            "SHA": c.get("sha", ""), "Message": c.get("message", ""),
-            "Author": c.get("author_id", ""), "Date": c.get("date_str", ""),
-            "Activity Tag": "", "Description": "", "sha_full": c.get("sha_full", ""),
-        })
+    # ── 2. Extended Deadlines ──
+    st.markdown("#### Extended Deadlines")
 
-    base_df = pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["SHA", "Message", "Author", "Date", "Activity Tag", "Description", "sha_full"])
-
-    si = saved.get("commit_inputs", {})
-    if not base_df.empty and si:
-        tags, descs = [], []
-        for _, r in base_df.iterrows():
-            item = si.get(r.get("sha_full", ""), {})
-            tags.append(item.get("tag", ""))
-            descs.append(item.get("desc", ""))
-        base_df["Activity Tag"] = tags
-        base_df["Description"] = descs
-
-    edited = st.data_editor(
-        base_df, width='stretch', height=450, hide_index=True,
-        column_config={
-            "Activity Tag": st.column_config.SelectboxColumn(
-                "Activity Tag", options=[""] + ACTIVITY_TAGS, required=False),
-            "Description": st.column_config.TextColumn("Description", required=False),
-            "sha_full": st.column_config.TextColumn("sha_full", disabled=True),
-        },
-        disabled=["SHA", "Message", "Author", "Date", "sha_full"],
-    )
-
-    sc1, sc2, sc3 = st.columns([1, 1, 2])
-    with sc1:
-        if st.button("Save Changes", type="primary"):
-            inp = {}
-            for _, r in edited.iterrows():
-                sf = r.get("sha_full", "")
-                if sf:
-                    inp[sf] = {
-                        "tag": (r.get("Activity Tag") or "").strip(),
-                        "desc": (r.get("Description") or "").strip(),
-                    }
-            pm = {
-                "project_start": pstart.isoformat(),
-                "project_end": pend.isoformat(),
-                "extensions": [d.isoformat() for d in st.session_state.pm_ext.get(rk, [])],
-                "commit_inputs": inp,
-                "updated_at": dt.datetime.utcnow().isoformat(),
-            }
-            _save_pm(rk, pm)
-            st.success("Saved.")
-
-    with sc2:
-        if st.button("Delete Project Data"):
-            _del_pm(rk)
-            st.session_state.pm_ext[rk] = []
-            st.success("Deleted. Refresh to see clean state.")
-
-    st.markdown("#### Gantt Chart")
-    if st.button("Generate Gantt Chart", type="primary", key="gantt_btn"):
-        ext = st.session_state.pm_ext.get(rk, [])
-        tasks = _build_gantt(edited, pstart, pend, ext)
-        _render_gantt(tasks, pstart, pend, ext)
-
-    st.markdown("#### Milestones")
-    if D["milestones"]:
-        df = pd.DataFrame(D["milestones"])[["title", "state", "open_issues", "closed_issues", "due_str"]]
-        df.columns = ["Milestone", "State", "Open", "Closed", "Due"]
-        st.dataframe(df, width='stretch', hide_index=True)
+    if extensions:
+        ext_df = pd.DataFrame(extensions)
+        ext_df = ext_df[["date", "reason", "created_at"]].copy()
+        ext_df.columns = ["Extended Date", "Reason", "Added On"]
+        ext_df.index = range(1, len(ext_df) + 1)
+        ext_df.index.name = "#"
+        st.dataframe(ext_df, width='stretch')
     else:
-        st.caption("No milestones defined for this repository.")
+        st.caption("No extensions recorded yet.")
 
+    st.markdown("##### Add Extension")
+    ec1, ec2 = st.columns([1, 2])
+    with ec1:
+        ext_date = st.date_input("New Extended Deadline", value=dt.date.today(), key="tl_ext_date")
+    with ec2:
+        ext_reason = st.text_input("Reason for Extension", placeholder="e.g. Scope change, resource delay...", key="tl_ext_reason")
 
-def _build_gantt(df, start, end, extensions, gap=2):
-    ws = dt.datetime.combine(start, dt.time(0))
-    re_date = max(extensions) if extensions else end
-    we = dt.datetime.combine(re_date, dt.time(23, 59))
+    ebc1, ebc2, ebc3 = st.columns([1, 1, 2])
+    with ebc1:
+        if st.button("Add Extension", type="primary", key="tl_add_ext"):
+            if not ext_reason.strip():
+                st.warning("Please provide a reason for the extension.")
+            else:
+                new_rows = list(rows)
+                new_rows.append({
+                    "type": "extension",
+                    "date": ext_date.isoformat(),
+                    "reason": ext_reason.strip(),
+                    "created_at": dt.datetime.utcnow().isoformat(),
+                })
+                try:
+                    resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
+                    st.session_state.tl_rows = new_rows
+                    st.session_state.tl_sha = resp.get("content", {}).get("sha")
+                    st.success("Extension added and saved to GitHub.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
 
-    rows = []
-    for _, r in df.iterrows():
-        author = (r.get("Author") or "").strip()
-        tag = (r.get("Activity Tag") or "").strip()
-        sha = (r.get("SHA") or "").strip()
-        desc = (r.get("Description") or "").strip()
-        ds = (r.get("Date") or "").strip()
-        if not author or not ds:
-            continue
-        try:
-            ts = dt.datetime.strptime(ds[:16], "%Y-%m-%d %H:%M")
-        except Exception:
-            continue
-        rows.append({"Author": author, "Tag": tag or "Uncategorized",
-                     "SHA": sha, "Desc": desc, "Start": ts})
+    with ebc2:
+        if extensions and st.button("Remove Last Extension", key="tl_rm_ext"):
+            new_rows = list(rows)
+            # Remove last extension
+            for i in range(len(new_rows) - 1, -1, -1):
+                if new_rows[i].get("type") == "extension":
+                    new_rows.pop(i)
+                    break
+            try:
+                resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
+                st.session_state.tl_rows = new_rows
+                st.session_state.tl_sha = resp.get("content", {}).get("sha")
+                st.success("Last extension removed.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to save: {e}")
 
-    if not rows:
-        return pd.DataFrame(columns=["Author", "Tag", "Start", "End", "SHA", "Desc"])
+    st.markdown("---")
 
-    df0 = pd.DataFrame(rows).sort_values(["Author", "Start"])
-    tasks = []
+    # ── 3. Visual Timeline ──
+    st.markdown("#### Project Timeline Overview")
 
-    for author, g in df0.groupby("Author", sort=False):
-        g = g.reset_index(drop=True)
-        last_e = None
-        for i in range(len(g)):
-            s = g.loc[i, "Start"]
-            e = g.loc[i + 1, "Start"] if i < len(g) - 1 else s + dt.timedelta(days=gap)
-            if e <= s:
-                e = s + dt.timedelta(days=gap)
-            s = max(s, ws)
-            e = min(e, we)
-            if e <= s:
-                e = s + dt.timedelta(hours=4)
-            tasks.append({"Author": author, "Start": s, "End": e,
-                         "Tag": g.loc[i, "Tag"], "SHA": g.loc[i, "SHA"],
-                         "Desc": g.loc[i, "Desc"]})
-            last_e = e
-        if last_e and last_e < we:
-            tasks.append({"Author": author, "Start": last_e, "End": we,
-                         "Tag": "Idle", "SHA": "", "Desc": "No activity"})
-
-    return pd.DataFrame(tasks)
-
-
-def _render_gantt(df, start, end, extensions):
-    if df.empty:
-        st.info("Fill in Activity Tags and Descriptions, then generate the chart.")
+    if not initial_row:
+        st.caption("Set an initial deadline to see the timeline visualization.")
         return
 
-    df = df.copy()
-    df["Tag"] = df["Tag"].fillna("Uncategorized")
+    try:
+        init_dt = dt.date.fromisoformat(initial_row["date"])
+    except Exception:
+        st.caption("Invalid initial deadline date.")
+        return
 
-    fig = px.timeline(df, x_start="Start", x_end="End", y="Author", color="Tag",
-                      color_discrete_map={"Idle": "rgba(148,163,184,0.25)"},
-                      hover_data={"Author": False, "Tag": True, "SHA": True, "Desc": True})
+    # Collect all dates for the timeline
+    first_commit = None
+    if D["commits"]:
+        dates = [c["date"] for c in D["commits"] if c.get("date")]
+        if dates:
+            first_commit = min(dates).date()
 
-    fig.update_traces(marker_line_width=0, width=0.08)
-    fig.update_yaxes(autorange="reversed")
+    project_start = first_commit or (init_dt - dt.timedelta(days=60))
+    today = dt.date.today()
 
-    x0 = dt.datetime.combine(start, dt.time(0))
-    re_date = max(extensions) if extensions else end
-    x1 = max(dt.datetime.combine(re_date, dt.time(23, 59)), df["End"].max())
-    fig.update_xaxes(range=[x0, x1])
+    # Build timeline bars
+    timeline_items = []
 
-    fig.update_layout(
-        height=min(900, 140 + 28 * len(df)),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#1f2937"),
-        xaxis=dict(tickfont=dict(color="#374151"), title_font=dict(color="#1a1040")),
-        yaxis=dict(tickfont=dict(color="#374151"), title_font=dict(color="#1a1040")),
-        legend=dict(font=dict(color="#1f2937")),
-        margin=dict(l=10, r=10, t=40, b=10),
-    )
+    # Development period (start → initial deadline)
+    timeline_items.append({
+        "Task": "Development Period",
+        "Start": dt.datetime.combine(project_start, dt.time(0)),
+        "End": dt.datetime.combine(init_dt, dt.time(23, 59)),
+        "Type": "Development",
+    })
 
-    end_dt = dt.datetime.combine(end + dt.timedelta(days=1), dt.time(0))
-    fig.add_vline(x=end_dt, line_width=2, line_dash="dot", line_color="#ef4444")
+    # Extension periods
+    prev_date = init_dt
+    for i, ext in enumerate(extensions, 1):
+        try:
+            ext_dt = dt.date.fromisoformat(ext["date"])
+        except Exception:
+            continue
+        timeline_items.append({
+            "Task": f"Extension {i}: {ext.get('reason', '')}",
+            "Start": dt.datetime.combine(prev_date, dt.time(0)),
+            "End": dt.datetime.combine(ext_dt, dt.time(23, 59)),
+            "Type": "Extension",
+        })
+        prev_date = ext_dt
 
-    for d in sorted({d for d in extensions if isinstance(d, dt.date)}):
-        fig.add_vline(
-            x=dt.datetime.combine(d + dt.timedelta(days=1), dt.time(0)),
-            line_width=1, line_dash="dot", line_color="#f0a080",
+    # Current status
+    final_deadline = prev_date
+    if today > final_deadline:
+        timeline_items.append({
+            "Task": "Overdue",
+            "Start": dt.datetime.combine(final_deadline, dt.time(0)),
+            "End": dt.datetime.combine(today, dt.time(23, 59)),
+            "Type": "Overdue",
+        })
+
+    if timeline_items:
+        tl_df = pd.DataFrame(timeline_items)
+        color_map = {
+            "Development": "#7c5cfc",
+            "Extension": "#f0a080",
+            "Overdue": "#ef4444",
+        }
+        fig = px.timeline(
+            tl_df, x_start="Start", x_end="End", y="Task", color="Type",
+            color_discrete_map=color_map,
+        )
+        fig.update_yaxes(autorange="reversed")
+        fig.update_layout(
+            height=max(200, 80 + len(timeline_items) * 60),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#1f2937"),
+            xaxis=dict(tickfont=dict(color="#374151"), title_text=""),
+            yaxis=dict(tickfont=dict(color="#374151", size=11), title_text=""),
+            margin=dict(l=10, r=10, t=30, b=10),
+            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5,
+                        font=dict(color="#1f2937")),
+            showlegend=True,
         )
 
-    fig.add_vrect(x0=end_dt, x1=x1, fillcolor="rgba(239,68,68,0.08)",
-                  line_width=0, layer="below")
+        # Deadline markers
+        fig.add_vline(x=dt.datetime.combine(init_dt, dt.time(0)), line_width=2,
+                      line_dash="dash", line_color="#ef4444",
+                      annotation_text="Deadline", annotation_position="top")
+        for ext in extensions:
+            try:
+                ext_dt_val = dt.date.fromisoformat(ext["date"])
+                fig.add_vline(x=dt.datetime.combine(ext_dt_val, dt.time(0)), line_width=1,
+                              line_dash="dot", line_color="#f0a080")
+            except Exception:
+                pass
 
-    st.plotly_chart(fig, width='stretch')
-    st.caption("Red line = deadline \u00b7 Yellow = extensions \u00b7 Shaded = extension zone")
+        # Today marker
+        fig.add_vline(x=dt.datetime.combine(today, dt.time(0)), line_width=2,
+                      line_dash="solid", line_color="#10b981",
+                      annotation_text="Today", annotation_position="top")
+
+        st.plotly_chart(fig, width='stretch', key="tl_gantt")
+
+    # ── KPI summary ──
+    days_total = (final_deadline - project_start).days
+    days_elapsed = (today - project_start).days
+    days_remaining = (final_deadline - today).days
+    total_extensions = len(extensions)
+    days_extended = (final_deadline - init_dt).days if extensions else 0
+
+    status = "On Track" if days_remaining >= 0 else "Overdue"
+    status_color = "#10b981" if days_remaining >= 0 else "#ef4444"
+
+    _metric_row([
+        ("Status", f'<span style="color:{status_color};font-weight:700">{status}</span>'),
+        ("Days Remaining", str(max(days_remaining, 0))),
+        ("Days Elapsed", str(days_elapsed)),
+        ("Total Duration", f"{days_total} days"),
+        ("Extensions", str(total_extensions)),
+        ("Days Extended", str(days_extended)),
+    ])
+
+    st.markdown("---")
+
+    # ── Milestones ──
+    st.markdown("#### Milestones")
+    if D["milestones"]:
+        mdf = pd.DataFrame(D["milestones"])[["title", "state", "open_issues", "closed_issues", "due_str"]]
+        mdf.columns = ["Milestone", "State", "Open", "Closed", "Due"]
+        st.dataframe(mdf, width='stretch', hide_index=True)
+    else:
+        st.caption("No milestones defined for this repository.")
 
 
 # ═══════════════════════════════════════════════════════════════
