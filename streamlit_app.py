@@ -1352,13 +1352,17 @@ def page_author_intelligence(D):
             if enriched:
                 df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
                 df.columns = ["Date", "Additions", "Deletions"]
-                df = df.groupby("Date", as_index=False).sum()
+                df = df.groupby("Date", as_index=False).sum().sort_values("Date")
                 fig = go.Figure()
-                fig.add_trace(go.Bar(x=df["Date"], y=df["Additions"], name="Additions",
-                                     marker_color="#10b981"))
-                fig.add_trace(go.Bar(x=df["Date"], y=df["Deletions"], name="Deletions",
-                                     marker_color="#ef4444"))
-                fig.update_layout(**_plotly_layout(280), barmode="group")
+                fig.add_trace(go.Scatter(x=df["Date"], y=df["Additions"], name="Additions",
+                                         fill="tozeroy", mode="lines",
+                                         line=dict(color="#10b981", width=1.5),
+                                         fillcolor="rgba(16,185,129,0.35)"))
+                fig.add_trace(go.Scatter(x=df["Date"], y=df["Deletions"], name="Deletions",
+                                         fill="tozeroy", mode="lines",
+                                         line=dict(color="#ef4444", width=1.5),
+                                         fillcolor="rgba(239,68,68,0.35)"))
+                fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, width='stretch', key="ai_changes")
 
         # --- Row 2: File Classification Pie & File Extension Pie ---
@@ -1370,23 +1374,29 @@ def page_author_intelligence(D):
                 fig = px.pie(df, values="Count", names="Classification",
                              color_discrete_sequence=px.colors.qualitative.Set2,
                              hole=0.4)
-                fig.update_layout(**_plotly_layout(380, margin=dict(l=10, r=10, t=28, b=10),
-                                                    showlegend=False))
-                fig.update_traces(textinfo="label+percent", textfont_size=10,
-                                  textposition="auto")
+                fig.update_layout(**_plotly_layout(260, margin=dict(l=5, r=5, t=10, b=5),
+                                                    showlegend=True,
+                                                    legend=dict(orientation="h", yanchor="top",
+                                                                y=-0.05, xanchor="center", x=0.5,
+                                                                font=dict(size=9, color="#374151"))))
+                fig.update_traces(textinfo="percent", textfont_size=9,
+                                  textposition="inside")
                 st.plotly_chart(fig, width='stretch', key="ai_cls_pie")
 
         with c4:
             st.markdown("#### Files by Extension")
             if ext_counter:
-                df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
+                df = pd.DataFrame(ext_counter.most_common(8), columns=["Extension", "Count"])
                 fig = px.pie(df, values="Count", names="Extension",
                              color_discrete_sequence=px.colors.qualitative.Pastel,
                              hole=0.4)
-                fig.update_layout(**_plotly_layout(380, margin=dict(l=10, r=10, t=28, b=10),
-                                                    showlegend=False))
-                fig.update_traces(textinfo="label+percent", textfont_size=10,
-                                  textposition="auto")
+                fig.update_layout(**_plotly_layout(260, margin=dict(l=5, r=5, t=10, b=5),
+                                                    showlegend=True,
+                                                    legend=dict(orientation="h", yanchor="top",
+                                                                y=-0.05, xanchor="center", x=0.5,
+                                                                font=dict(size=9, color="#374151"))))
+                fig.update_traces(textinfo="percent", textfont_size=9,
+                                  textposition="inside")
                 st.plotly_chart(fig, width='stretch', key="ai_ext_pie")
 
         # --- Row 3: Top Files by Commits & Churn ---
@@ -2090,19 +2100,23 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         return _fig_to_png_bytes(fig, 900, 400)
     _try_chart("daily_activity", _c1)
 
-    # 2) Code changes per commit
+    # 2) Code changes per commit (area chart for reliable PDF rendering)
     def _c2():
         if not enriched:
             return None
         df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
         df.columns = ["Date", "Additions", "Deletions"]
-        df = df.groupby("Date", as_index=False).sum()
+        df = df.groupby("Date", as_index=False).sum().sort_values("Date")
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=df["Date"], y=df["Additions"], name="Additions",
-                             marker_color="#10b981"))
-        fig.add_trace(go.Bar(x=df["Date"], y=df["Deletions"], name="Deletions",
-                             marker_color="#ef4444"))
-        fig.update_layout(**_chart_layout("Code Changes per Commit", 400), barmode="group")
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Additions"], name="Additions",
+                                 fill="tozeroy", mode="lines",
+                                 line=dict(color="#10b981", width=2),
+                                 fillcolor="rgba(16,185,129,0.35)"))
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Deletions"], name="Deletions",
+                                 fill="tozeroy", mode="lines",
+                                 line=dict(color="#ef4444", width=2),
+                                 fillcolor="rgba(239,68,68,0.35)"))
+        fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
         return _fig_to_png_bytes(fig, 900, 400)
     _try_chart("code_changes", _c2)
 
