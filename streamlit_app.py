@@ -297,6 +297,53 @@ CUSTOM_CSS = """
         box-shadow: 0 4px 18px rgba(124,92,252,0.35);
         transform: translateY(-1px);
     }
+    .stApp button[kind="secondary"],
+    .stApp button:not([kind]) {
+        background: #faf9ff !important;
+        color: #4a3d8f !important; border: 1px solid #d4cef0 !important;
+        border-radius: 10px; font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    .stApp button[kind="secondary"]:hover,
+    .stApp button:not([kind]):hover {
+        background: #f0eeff !important;
+        border-color: #b0a0f0 !important;
+        color: #7c5cfc !important;
+        box-shadow: 0 2px 12px rgba(124,92,252,0.12);
+    }
+    .stDownloadButton button {
+        background: linear-gradient(135deg, #7c5cfc, #9580f0) !important;
+        color: #fff !important; border: none !important;
+        border-radius: 10px; font-weight: 600;
+    }
+    .stDownloadButton button:hover {
+        box-shadow: 0 4px 18px rgba(124,92,252,0.35);
+        transform: translateY(-1px);
+    }
+
+    /* ─── Select Boxes & Inputs ─── */
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div,
+    .stTextInput > div > div,
+    .stNumberInput > div > div,
+    .stDateInput > div > div {
+        border-color: #d4cef0 !important;
+        border-radius: 10px !important;
+        color: #374151 !important;
+    }
+    .stSelectbox label, .stMultiSelect label, .stTextInput label,
+    .stNumberInput label, .stDateInput label, .stTextArea label {
+        color: #4a3d8f !important; font-weight: 500 !important;
+    }
+
+    /* ─── Dataframe / Table Overrides ─── */
+    div[data-testid="stDataFrame"] th {
+        background: #7c5cfc !important;
+        color: #fff !important;
+    }
+    div[data-testid="stDataFrame"] td {
+        color: #374151 !important;
+    }
 
     /* ─── Expanders & Tabs ─── */
     .streamlit-expanderHeader { color: #1a1040 !important; font-weight: 600; }
@@ -390,9 +437,14 @@ def _classify_file(path: str) -> str:
 def _plotly_layout(height=260, **kw):
     base = dict(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color="#374151", size=11),
-        xaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0", title_font_color="#6b7280"),
-        yaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0", title_font_color="#6b7280"),
+        font=dict(family="Inter, sans-serif", color="#1f2937", size=12),
+        xaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0",
+                   title_font=dict(color="#1a1040", size=12),
+                   tickfont=dict(color="#374151", size=11)),
+        yaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0",
+                   title_font=dict(color="#1a1040", size=12),
+                   tickfont=dict(color="#374151", size=11)),
+        legend=dict(font=dict(color="#1f2937", size=11)),
         margin=dict(l=0, r=0, t=10, b=0), height=height,
         colorway=["#7c5cfc", "#2070e0", "#c070e0", "#f0a080", "#70d0f0",
                   "#10b981", "#f59e0b", "#ef4444", "#b0a0f0"],
@@ -1123,8 +1175,10 @@ def page_incident_log(D):
         fig = px.histogram(pd.DataFrame({"Days": rts}), x="Days", nbins=20,
                            color_discrete_sequence=["#06b6d4"])
         fig.update_layout(**_plotly_layout(240,
-                          xaxis=dict(gridcolor="#f0eeff", title="Days to Resolution"),
-                          yaxis=dict(gridcolor="#f0eeff", title="Count")))
+                          xaxis=dict(gridcolor="#f0eeff", title="Days to Resolution",
+                                     title_font=dict(color="#1a1040"), tickfont=dict(color="#374151")),
+                          yaxis=dict(gridcolor="#f0eeff", title="Count",
+                                     title_font=dict(color="#1a1040"), tickfont=dict(color="#374151"))))
         st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1413,8 +1467,14 @@ def page_author_intelligence(D):
             "first_date": _fmt(f), "last_date": _fmt(l),
         }
         # Build chart images for PDF
-        chart_images = _build_author_chart_images(
-            enriched, ac, cls_counter, ext_counter, top_files, top_churn)
+        with st.spinner("Rendering charts for PDF (this may take 30-60 seconds)..."):
+            chart_images = _build_author_chart_images(
+                enriched, ac, cls_counter, ext_counter, top_files, top_churn)
+        if chart_images:
+            st.success(f"{len(chart_images)} of 9 charts rendered for PDF.")
+        else:
+            st.warning("Chart rendering failed (kaleido/Chromium may not be available). "
+                       "PDF will be generated without charts.")
         with st.spinner("Generating PDF report..."):
             pdf_bytes = _gen_author_pdf(rd, enriched, file_analysis, chart_images)
         st.download_button(
@@ -1631,7 +1691,10 @@ def _render_gantt(df, start, end, extensions):
     fig.update_layout(
         height=min(900, 140 + 28 * len(df)),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#374151"),
+        font=dict(color="#1f2937"),
+        xaxis=dict(tickfont=dict(color="#374151"), title_font=dict(color="#1a1040")),
+        yaxis=dict(tickfont=dict(color="#374151"), title_font=dict(color="#1a1040")),
+        legend=dict(font=dict(color="#1f2937")),
         margin=dict(l=10, r=10, t=40, b=10),
     )
 
@@ -1943,8 +2006,14 @@ _AUTHOR_TPL = None  # PDF-based now; kept as placeholder
 def _fig_to_png_bytes(fig, width=800, height=400):
     """Convert a Plotly figure to PNG bytes for PDF embedding."""
     try:
-        return fig.to_image(format="png", width=width, height=height, scale=2)
-    except Exception:
+        img_bytes = fig.to_image(format="png", width=width, height=height, scale=2)
+        if img_bytes and len(img_bytes) > 100:
+            return img_bytes
+        return None
+    except Exception as exc:
+        import traceback
+        print(f"[PDF-CHART] to_image failed: {exc}")
+        traceback.print_exc()
         return None
 
 
@@ -1952,13 +2021,17 @@ def _chart_layout(title="", height=400):
     """Consistent light chart layout for PDF export."""
     return dict(
         paper_bgcolor="#ffffff", plot_bgcolor="#faf9ff",
-        font=dict(family="Helvetica, Arial, sans-serif", color="#374151", size=13),
-        xaxis=dict(gridcolor="#e4e0f0", title_font_size=12, tickfont_size=11, linecolor="#d1cde0"),
-        yaxis=dict(gridcolor="#e4e0f0", title_font_size=12, tickfont_size=11, linecolor="#d1cde0"),
+        font=dict(family="Helvetica, Arial, sans-serif", color="#1f2937", size=13),
+        xaxis=dict(gridcolor="#e4e0f0", linecolor="#d1cde0",
+                   title_font=dict(color="#1a1040", size=13),
+                   tickfont=dict(color="#374151", size=12)),
+        yaxis=dict(gridcolor="#e4e0f0", linecolor="#d1cde0",
+                   title_font=dict(color="#1a1040", size=13),
+                   tickfont=dict(color="#374151", size=12)),
         margin=dict(l=65, r=30, t=50, b=65),
         title=dict(text=title, font=dict(size=16, color="#1a1040"), x=0.5, xanchor="center"),
         height=height,
-        legend=dict(font=dict(size=11, color="#374151")),
+        legend=dict(font=dict(size=12, color="#1f2937")),
         colorway=["#7c5cfc", "#2070e0", "#c070e0", "#f0a080", "#70d0f0",
                   "#10b981", "#f59e0b", "#ef4444"],
     )
@@ -1967,150 +2040,149 @@ def _chart_layout(title="", height=400):
 def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files, top_churn):
     """Build chart PNG images for PDF embedding. Returns dict of name->bytes."""
     charts = {}
+    _errors = []
+
+    def _try_chart(name, build_fn):
+        """Wrapper with error capture for each chart."""
+        try:
+            img = build_fn()
+            if img:
+                charts[name] = img
+            else:
+                _errors.append(f"{name}: to_image returned None")
+        except Exception as exc:
+            _errors.append(f"{name}: {exc}")
+            import traceback
+            traceback.print_exc()
 
     # 1) Daily Activity
-    try:
+    def _c1():
         dc = Counter(c["date_day"] for c in ac)
-        if dc:
-            df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
-            fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
-            fig.update_layout(**_chart_layout("Daily Commit Activity", 400))
-            img = _fig_to_png_bytes(fig, 900, 400)
-            if img:
-                charts["daily_activity"] = img
-    except Exception:
-        pass
+        if not dc:
+            return None
+        df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
+        fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
+        fig.update_layout(**_chart_layout("Daily Commit Activity", 400))
+        return _fig_to_png_bytes(fig, 900, 400)
+    _try_chart("daily_activity", _c1)
 
     # 2) Code changes per commit
-    try:
-        if enriched:
-            df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
-            df.columns = ["Date", "Additions", "Deletions"]
-            fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
-                         color_discrete_sequence=["#10b981", "#ef4444"])
-            fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
-            img = _fig_to_png_bytes(fig, 900, 400)
-            if img:
-                charts["code_changes"] = img
-    except Exception:
-        pass
+    def _c2():
+        if not enriched:
+            return None
+        df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
+        df.columns = ["Date", "Additions", "Deletions"]
+        fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
+                     color_discrete_sequence=["#10b981", "#ef4444"])
+        fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
+        return _fig_to_png_bytes(fig, 900, 400)
+    _try_chart("code_changes", _c2)
 
     # 3) File classification pie
-    try:
-        if cls_counter:
-            df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
-            fig = px.pie(df, values="Count", names="Classification",
-                         color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4)
-            fig.update_layout(**_chart_layout("Files by Classification", 450))
-            fig.update_traces(textinfo="label+percent", textfont_size=13)
-            img = _fig_to_png_bytes(fig, 750, 450)
-            if img:
-                charts["file_class_pie"] = img
-    except Exception:
-        pass
+    def _c3():
+        if not cls_counter:
+            return None
+        df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
+        fig = px.pie(df, values="Count", names="Classification",
+                     color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4)
+        fig.update_layout(**_chart_layout("Files by Classification", 450))
+        fig.update_traces(textinfo="label+percent", textfont_size=13)
+        return _fig_to_png_bytes(fig, 750, 450)
+    _try_chart("file_class_pie", _c3)
 
     # 4) File extension pie
-    try:
-        if ext_counter:
-            df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
-            fig = px.pie(df, values="Count", names="Extension",
-                         color_discrete_sequence=px.colors.qualitative.Pastel, hole=0.4)
-            fig.update_layout(**_chart_layout("Files by Extension", 450))
-            fig.update_traces(textinfo="label+percent", textfont_size=13)
-            img = _fig_to_png_bytes(fig, 750, 450)
-            if img:
-                charts["file_ext_pie"] = img
-    except Exception:
-        pass
+    def _c4():
+        if not ext_counter:
+            return None
+        df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
+        fig = px.pie(df, values="Count", names="Extension",
+                     color_discrete_sequence=px.colors.qualitative.Pastel, hole=0.4)
+        fig.update_layout(**_chart_layout("Files by Extension", 450))
+        fig.update_traces(textinfo="label+percent", textfont_size=13)
+        return _fig_to_png_bytes(fig, 750, 450)
+    _try_chart("file_ext_pie", _c4)
 
     # 5) Top files by commits
-    try:
-        if top_files:
-            df = pd.DataFrame(top_files)[["filename", "commits"]]
-            df.columns = ["File", "Commits"]
-            df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
-            fig = px.bar(df, x="Commits", y="File", orientation="h",
-                         color_discrete_sequence=["#c070e0"])
-            h = max(400, 60 + len(top_files) * 28)
-            fig.update_layout(**_chart_layout("Top Files by Commit Frequency", h))
-            fig.update_layout(yaxis=dict(autorange="reversed"))
-            img = _fig_to_png_bytes(fig, 900, h)
-            if img:
-                charts["top_files"] = img
-    except Exception:
-        pass
+    def _c5():
+        if not top_files:
+            return None
+        df = pd.DataFrame(top_files)[["filename", "commits"]]
+        df.columns = ["File", "Commits"]
+        df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
+        fig = px.bar(df, x="Commits", y="File", orientation="h",
+                     color_discrete_sequence=["#c070e0"])
+        h = max(400, 60 + len(top_files) * 28)
+        fig.update_layout(**_chart_layout("Top Files by Commit Frequency", h))
+        fig.update_layout(yaxis=dict(autorange="reversed"))
+        return _fig_to_png_bytes(fig, 900, h)
+    _try_chart("top_files", _c5)
 
     # 6) Top files by churn
-    try:
-        if top_churn:
-            df = pd.DataFrame(top_churn)
-            df["churn"] = df["additions"] + df["deletions"]
-            df["short"] = df["filename"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
-            fig = px.bar(df, x="churn", y="short", orientation="h",
-                         color="churn", color_continuous_scale="YlOrRd")
-            h = max(400, 60 + len(top_churn) * 28)
-            fig.update_layout(**_chart_layout("Top Files by Code Churn", h))
-            fig.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
-            img = _fig_to_png_bytes(fig, 900, h)
-            if img:
-                charts["top_churn"] = img
-    except Exception:
-        pass
+    def _c6():
+        if not top_churn:
+            return None
+        df = pd.DataFrame(top_churn)
+        df["churn"] = df["additions"] + df["deletions"]
+        df["short"] = df["filename"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
+        fig = px.bar(df, x="churn", y="short", orientation="h",
+                     color="churn", color_continuous_scale="YlOrRd")
+        h = max(400, 60 + len(top_churn) * 28)
+        fig.update_layout(**_chart_layout("Top Files by Code Churn", h))
+        fig.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
+        return _fig_to_png_bytes(fig, 900, h)
+    _try_chart("top_churn", _c6)
 
     # 7) Cumulative lines
-    try:
-        if enriched:
-            cum_add, cum_del = 0, 0
-            cum_data = []
-            for c_item in enriched:
-                cum_add += c_item["additions"]
-                cum_del += c_item["deletions"]
-                cum_data.append({"Date": c_item["date_str"], "Added": cum_add,
-                                 "Removed": cum_del, "Net": cum_add - cum_del})
-            df = pd.DataFrame(cum_data)
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
-                                     name="Cumulative +", line=dict(color="#10b981", width=2.5)))
-            fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
-                                     name="Cumulative −", line=dict(color="#ef4444", width=2.5)))
-            fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
-                                     name="Net", line=dict(color="#7c5cfc", width=2.5, dash="dot")))
-            fig.update_layout(**_chart_layout("Cumulative Lines Over Time", 400))
-            img = _fig_to_png_bytes(fig, 900, 400)
-            if img:
-                charts["cumulative"] = img
-    except Exception:
-        pass
+    def _c7():
+        if not enriched:
+            return None
+        cum_add, cum_del = 0, 0
+        cum_data = []
+        for c_item in enriched:
+            cum_add += c_item["additions"]
+            cum_del += c_item["deletions"]
+            cum_data.append({"Date": c_item["date_str"], "Added": cum_add,
+                             "Removed": cum_del, "Net": cum_add - cum_del})
+        df = pd.DataFrame(cum_data)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
+                                 name="Cumulative +", line=dict(color="#10b981", width=2.5)))
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
+                                 name="Cumulative −", line=dict(color="#ef4444", width=2.5)))
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
+                                 name="Net", line=dict(color="#7c5cfc", width=2.5, dash="dot")))
+        fig.update_layout(**_chart_layout("Cumulative Lines Over Time", 400))
+        return _fig_to_png_bytes(fig, 900, 400)
+    _try_chart("cumulative", _c7)
 
     # 8) Commits by day of week
-    try:
-        if ac:
-            days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
-            df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
-                              columns=["Day", "Commits"])
-            fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f0a080"],
-                         category_orders={"Day": days_of_week})
-            fig.update_layout(**_chart_layout("Commits by Day of Week", 380))
-            img = _fig_to_png_bytes(fig, 750, 380)
-            if img:
-                charts["day_of_week"] = img
-    except Exception:
-        pass
+    def _c8():
+        if not ac:
+            return None
+        days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
+        df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
+                          columns=["Day", "Commits"])
+        fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f0a080"],
+                     category_orders={"Day": days_of_week})
+        fig.update_layout(**_chart_layout("Commits by Day of Week", 380))
+        return _fig_to_png_bytes(fig, 750, 380)
+    _try_chart("day_of_week", _c8)
 
     # 9) Commit size distribution
-    try:
-        if enriched:
-            sizes = [e["additions"] + e["deletions"] for e in enriched]
-            fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
-                               x="Lines Changed", nbins=30,
-                               color_discrete_sequence=["#7c5cfc"])
-            fig.update_layout(**_chart_layout("Commit Size Distribution", 380))
-            img = _fig_to_png_bytes(fig, 900, 380)
-            if img:
-                charts["size_dist"] = img
-    except Exception:
-        pass
+    def _c9():
+        if not enriched:
+            return None
+        sizes = [e["additions"] + e["deletions"] for e in enriched]
+        fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
+                           x="Lines Changed", nbins=30,
+                           color_discrete_sequence=["#7c5cfc"])
+        fig.update_layout(**_chart_layout("Commit Size Distribution", 380))
+        return _fig_to_png_bytes(fig, 900, 380)
+    _try_chart("size_dist", _c9)
+
+    if _errors:
+        print(f"[PDF-CHART] {len(_errors)} chart(s) failed: {_errors}")
 
     return charts
 
