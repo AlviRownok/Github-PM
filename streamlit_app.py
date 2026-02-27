@@ -224,7 +224,7 @@ CUSTOM_CSS = """
     section[data-testid="stSidebar"] hr { border-color: rgba(176,160,240,0.15) !important; }
 
     /* ─── Main Content Text ─── */
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: #1a1040 !important; font-family: 'Inter', sans-serif; }
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 { color: #1a1040 !important; font-family: 'Inter', sans-serif; }
     .stApp p, .stApp li, .stApp span { color: #374151; }
 
     /* ─── Metric Cards ─── */
@@ -369,6 +369,9 @@ CUSTOM_CSS = """
         border-color: #d4cef0 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
+    }
+    .stTextInput input {
+        border-radius: 10px !important;
     }
     .stSelectbox > div > div > div[data-baseweb="select"] span,
     .stSelectbox [data-baseweb="select"] .st-eh,
