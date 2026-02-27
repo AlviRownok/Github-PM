@@ -171,6 +171,32 @@ CUSTOM_CSS = """
         color: #ffffff !important;
         fill: #ffffff !important;
     }
+    /* Move Running indicator & decoration line above toolbar */
+    div[data-testid="stStatusWidget"] {
+        position: fixed !important;
+        top: 0 !important;
+        right: 0.5rem !important;
+        z-index: 1000 !important;
+        background: linear-gradient(135deg, #7c5cfc, #b0a0f0) !important;
+        border-radius: 0 0 6px 6px !important;
+        padding: 2px 10px !important;
+        box-shadow: 0 2px 6px rgba(124,92,252,0.25) !important;
+    }
+    div[data-testid="stStatusWidget"] label,
+    div[data-testid="stStatusWidget"] span,
+    div[data-testid="stStatusWidget"] svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    div[data-testid="stDecoration"] {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 999 !important;
+        height: 3px !important;
+        background: linear-gradient(90deg, #7c5cfc, #b0a0f0, #7c5cfc) !important;
+    }
 
     /* ─── Animations ─── */
     @keyframes fadeInUp {
