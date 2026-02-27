@@ -919,7 +919,7 @@ def page_command_center(D):
                       labels={"week": "Week", "total": "Commits"},
                       color_discrete_sequence=["#7c5cfc"])
         fig.update_layout(**_plotly_layout(250))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.caption("Weekly activity data not yet available from GitHub.")
 
@@ -927,7 +927,7 @@ def page_command_center(D):
     if commits[:25]:
         df = pd.DataFrame(commits[:25])[["sha", "message", "author_id", "date_str"]]
         df.columns = ["SHA", "Message", "Author", "Date"]
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.caption("No branch-specific commits found.")
 
@@ -974,12 +974,12 @@ def page_asset_inventory(D):
             {"Classification": k, "Count": v, "Pct": f"{v / len(files) * 100:.1f}%"}
             for k, v in sorted(clsf.items(), key=lambda x: -x[1])
         ])
-        st.dataframe(df_c, use_container_width=True, hide_index=True)
+        st.dataframe(df_c, width='stretch', hide_index=True)
         if len(df_c) > 1:
             fig = px.pie(df_c, values="Count", names="Classification",
                          color_discrete_sequence=px.colors.qualitative.Set3)
             fig.update_layout(**_plotly_layout(280))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with col2:
         st.markdown("#### Language Distribution")
@@ -989,11 +989,11 @@ def page_asset_inventory(D):
                 {"Language": k, "Bytes": v, "Share": f"{v / tb * 100:.1f}%"}
                 for k, v in sorted(languages.items(), key=lambda x: -x[1])
             ])
-            st.dataframe(df_l, use_container_width=True, hide_index=True)
+            st.dataframe(df_l, width='stretch', hide_index=True)
             fig = px.pie(df_l, values="Bytes", names="Language",
                          color_discrete_sequence=px.colors.qualitative.Pastel)
             fig.update_layout(**_plotly_layout(280))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.caption("No language data available.")
 
@@ -1003,14 +1003,14 @@ def page_asset_inventory(D):
         df_e = pd.DataFrame(top_e, columns=["Extension", "Count"])
         fig = px.bar(df_e, x="Extension", y="Count", color_discrete_sequence=["#2070e0"])
         fig.update_layout(**_plotly_layout(240))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.markdown("#### Complete File Inventory")
     df_f = pd.DataFrame(files)
     df_f["Size"] = df_f["size"].apply(lambda s: f"{s / 1024:.1f} KB" if s >= 1024 else f"{s} B")
     df_f = df_f[["path", "classification", "Size"]].rename(columns={
         "path": "File Path", "classification": "Classification"})
-    st.dataframe(df_f, use_container_width=True, hide_index=True, height=420)
+    st.dataframe(df_f, width='stretch', hide_index=True, height=420)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1046,7 +1046,7 @@ def page_change_ledger(D):
         df = pd.DataFrame(sorted(day_counts.items()), columns=["Date", "Changes"])
         fig = px.bar(df, x="Date", y="Changes", color_discrete_sequence=["#7c5cfc"])
         fig.update_layout(**_plotly_layout(250))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.markdown("#### Changes by Author")
     ac = Counter(c["author_id"] for c in commits)
@@ -1054,12 +1054,12 @@ def page_change_ledger(D):
         df = pd.DataFrame(ac.most_common(), columns=["Author", "Commits"])
         fig = px.bar(df, x="Author", y="Commits", color_discrete_sequence=["#2070e0"])
         fig.update_layout(**_plotly_layout(250))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     st.markdown("#### Complete Change Log")
     df = pd.DataFrame(commits)[["sha", "message", "author_id", "date_str"]]
     df.columns = ["SHA", "Description", "Author", "Timestamp"]
-    st.dataframe(df, use_container_width=True, hide_index=True, height=500)
+    st.dataframe(df, width='stretch', hide_index=True, height=500)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1094,7 +1094,7 @@ def page_access_registry(D):
             ("Active (30d)", str(sum(1 for r in rows if r["Status"] == "Active"))),
             ("Inactive", str(sum(1 for r in rows if r["Status"] == "Inactive"))),
         ])
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
     else:
         st.caption("No contributor data for this branch.")
 
@@ -1103,7 +1103,7 @@ def page_access_registry(D):
     if D["contributors"]:
         df = pd.DataFrame(D["contributors"])[["login", "contributions", "type"]]
         df.columns = ["Login", "Total Contributions", "Type"]
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.caption("No contributor data available.")
 
@@ -1126,7 +1126,7 @@ def page_access_registry(D):
             fig = px.bar(df, x="Day", y="Commits", color="Author", barmode="group",
                          category_orders={"Day": days_order})
             fig.update_layout(**_plotly_layout(300))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1161,7 +1161,7 @@ def page_incident_log(D):
         if oi:
             df = pd.DataFrame(oi)[["number", "title", "author", "assignee", "labels_str", "created_str"]]
             df.columns = ["#", "Title", "Reporter", "Assignee", "Labels", "Created"]
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
         else:
             st.success("No open issues!")
 
@@ -1170,7 +1170,7 @@ def page_incident_log(D):
         if ci:
             df = pd.DataFrame(ci[:20])[["number", "title", "assignee", "resolution_days", "closed_str"]]
             df.columns = ["#", "Title", "Assignee", "Days to Close", "Closed"]
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
         else:
             st.caption("No closed issues.")
 
@@ -1184,7 +1184,7 @@ def page_incident_log(D):
         df = pd.DataFrame(lc.most_common(15), columns=["Label", "Count"])
         fig = px.bar(df, x="Label", y="Count", color_discrete_sequence=["#eab308"])
         fig.update_layout(**_plotly_layout(240))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     if rts:
         st.markdown("#### Resolution Time Distribution")
@@ -1195,7 +1195,7 @@ def page_incident_log(D):
                                      title_font=dict(color="#1a1040"), tickfont=dict(color="#374151")),
                           yaxis=dict(gridcolor="#f0eeff", title="Count",
                                      title_font=dict(color="#1a1040"), tickfont=dict(color="#374151"))))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1226,7 +1226,7 @@ def page_pull_requests(D):
         ])
         df = pd.DataFrame(bp)[["number", "title", "state", "author", "head", "base", "created_str", "merged_str"]]
         df.columns = ["#", "Title", "Status", "Author", "Head", "Base", "Created", "Merged"]
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.info("No pull requests associated with this branch.")
 
@@ -1235,7 +1235,7 @@ def page_pull_requests(D):
     if ap:
         df = pd.DataFrame(ap)[["number", "title", "state", "author", "head", "base", "created_str"]]
         df.columns = ["#", "Title", "Status", "Author", "Head", "Base", "Created"]
-        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+        st.dataframe(df, width='stretch', hide_index=True, height=400)
     else:
         st.caption("No pull requests found.")
 
@@ -1345,7 +1345,7 @@ def page_author_intelligence(D):
                 df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
                 fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
                 fig.update_layout(**_plotly_layout(280))
-                st.plotly_chart(fig, use_container_width=True, key="ai_daily")
+                st.plotly_chart(fig, width='stretch', key="ai_daily")
 
         with c2:
             st.markdown("#### Code Changes per Commit")
@@ -1359,7 +1359,7 @@ def page_author_intelligence(D):
                 fig.add_trace(go.Bar(x=df["Date"], y=df["Deletions"], name="Deletions",
                                      marker_color="#ef4444"))
                 fig.update_layout(**_plotly_layout(280), barmode="group")
-                st.plotly_chart(fig, use_container_width=True, key="ai_changes")
+                st.plotly_chart(fig, width='stretch', key="ai_changes")
 
         # --- Row 2: File Classification Pie & File Extension Pie ---
         c3, c4 = st.columns(2)
@@ -1370,12 +1370,11 @@ def page_author_intelligence(D):
                 fig = px.pie(df, values="Count", names="Classification",
                              color_discrete_sequence=px.colors.qualitative.Set2,
                              hole=0.4)
-                fig.update_layout(**_plotly_layout(380),
-                                  showlegend=False,
-                                  margin=dict(l=10, r=10, t=28, b=10))
+                fig.update_layout(**_plotly_layout(380, margin=dict(l=10, r=10, t=28, b=10),
+                                                    showlegend=False))
                 fig.update_traces(textinfo="label+percent", textfont_size=10,
                                   textposition="auto")
-                st.plotly_chart(fig, use_container_width=True, key="ai_cls_pie")
+                st.plotly_chart(fig, width='stretch', key="ai_cls_pie")
 
         with c4:
             st.markdown("#### Files by Extension")
@@ -1384,12 +1383,11 @@ def page_author_intelligence(D):
                 fig = px.pie(df, values="Count", names="Extension",
                              color_discrete_sequence=px.colors.qualitative.Pastel,
                              hole=0.4)
-                fig.update_layout(**_plotly_layout(380),
-                                  showlegend=False,
-                                  margin=dict(l=10, r=10, t=28, b=10))
+                fig.update_layout(**_plotly_layout(380, margin=dict(l=10, r=10, t=28, b=10),
+                                                    showlegend=False))
                 fig.update_traces(textinfo="label+percent", textfont_size=10,
                                   textposition="auto")
-                st.plotly_chart(fig, use_container_width=True, key="ai_ext_pie")
+                st.plotly_chart(fig, width='stretch', key="ai_ext_pie")
 
         # --- Row 3: Top Files by Commits & Churn ---
         c5, c6 = st.columns(2)
@@ -1403,7 +1401,7 @@ def page_author_intelligence(D):
                              color_discrete_sequence=["#c070e0"])
                 fig.update_layout(**_plotly_layout(min(380, 40 + len(top_files) * 22)))
                 fig.update_layout(yaxis=dict(autorange="reversed"))
-                st.plotly_chart(fig, use_container_width=True, key="ai_topfiles")
+                st.plotly_chart(fig, width='stretch', key="ai_topfiles")
 
         with c6:
             st.markdown("#### Top Files by Code Churn")
@@ -1415,7 +1413,7 @@ def page_author_intelligence(D):
                              color="churn", color_continuous_scale="YlOrRd")
                 fig.update_layout(**_plotly_layout(min(380, 40 + len(top_churn) * 22)))
                 fig.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
-                st.plotly_chart(fig, use_container_width=True, key="ai_churn")
+                st.plotly_chart(fig, width='stretch', key="ai_churn")
 
         # --- Row 4: Cumulative Lines & Weekly Heatmap ---
         c7, c8 = st.columns(2)
@@ -1438,7 +1436,7 @@ def page_author_intelligence(D):
                 fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
                                          name="Net", line=dict(color="#7c5cfc", width=2, dash="dot")))
                 fig.update_layout(**_plotly_layout(280))
-                st.plotly_chart(fig, use_container_width=True, key="ai_cumulative")
+                st.plotly_chart(fig, width='stretch', key="ai_cumulative")
 
         with c8:
             st.markdown("#### Commits by Day of Week")
@@ -1450,7 +1448,7 @@ def page_author_intelligence(D):
                 fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f0a080"],
                              category_orders={"Day": days_of_week})
                 fig.update_layout(**_plotly_layout(280))
-                st.plotly_chart(fig, use_container_width=True, key="ai_dow")
+                st.plotly_chart(fig, width='stretch', key="ai_dow")
 
         # --- Row 5: Commit Size Distribution ---
         st.markdown("#### Commit Size Distribution")
@@ -1460,7 +1458,7 @@ def page_author_intelligence(D):
                                x="Lines Changed", nbins=30,
                                color_discrete_sequence=["#7c5cfc"])
             fig.update_layout(**_plotly_layout(250))
-            st.plotly_chart(fig, use_container_width=True, key="ai_sizedist")
+            st.plotly_chart(fig, width='stretch', key="ai_sizedist")
 
         # --- Full Commit Details Table ---
         st.markdown("#### Full Commit History")
@@ -1468,7 +1466,7 @@ def page_author_intelligence(D):
             df = pd.DataFrame(enriched)[
                 ["sha", "message", "date_str", "additions", "deletions", "files_changed", "file_names"]]
             df.columns = ["SHA", "Message", "Date", "Lines +", "Lines −", "Files", "File Names"]
-            st.dataframe(df, use_container_width=True, hide_index=True,
+            st.dataframe(df, width='stretch', hide_index=True,
                          height=min(600, 60 + len(enriched) * 35))
 
         # --- Detailed File Table ---
@@ -1478,7 +1476,7 @@ def page_author_intelligence(D):
             df = pd.DataFrame(fa_list)[["filename", "classification", "extension",
                                         "commits", "additions", "deletions", "net"]]
             df.columns = ["File Path", "Category", "Extension", "Commits", "Lines +", "Lines −", "Net"]
-            st.dataframe(df, use_container_width=True, hide_index=True,
+            st.dataframe(df, width='stretch', hide_index=True,
                          height=min(500, 60 + len(fa_list) * 35))
 
         # --- Export as PDF ---
@@ -1592,7 +1590,7 @@ def page_project_timeline(D):
         base_df["Description"] = descs
 
     edited = st.data_editor(
-        base_df, use_container_width=True, height=450, hide_index=True,
+        base_df, width='stretch', height=450, hide_index=True,
         column_config={
             "Activity Tag": st.column_config.SelectboxColumn(
                 "Activity Tag", options=[""] + ACTIVITY_TAGS, required=False),
@@ -1639,7 +1637,7 @@ def page_project_timeline(D):
     if D["milestones"]:
         df = pd.DataFrame(D["milestones"])[["title", "state", "open_issues", "closed_issues", "due_str"]]
         df.columns = ["Milestone", "State", "Open", "Closed", "Due"]
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
     else:
         st.caption("No milestones defined for this repository.")
 
@@ -1736,7 +1734,7 @@ def _render_gantt(df, start, end, extensions):
     fig.add_vrect(x0=end_dt, x1=x1, fillcolor="rgba(239,68,68,0.08)",
                   line_width=0, layer="below")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     st.caption("Red line = deadline \u00b7 Yellow = extensions \u00b7 Shaded = extension zone")
 
 
@@ -1778,7 +1776,7 @@ def page_compliance_hub(D):
          "Status": "\u2705 Available" if D["issues"] else "\u26a0\ufe0f No data",
          "Source": "Incident Log"},
     ]
-    st.dataframe(pd.DataFrame(controls), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(controls), width='stretch', hide_index=True)
 
     st.markdown("---")
 
@@ -2583,9 +2581,9 @@ def main():
 
         lc, rc = st.columns(2)
         with lc:
-            load_btn = st.button("Load", type="primary", use_container_width=True)
+            load_btn = st.button("Load", type="primary", width='stretch')
         with rc:
-            refresh_btn = st.button("Refresh", use_container_width=True)
+            refresh_btn = st.button("Refresh", width='stretch')
 
         st.markdown("---")
 
