@@ -370,9 +370,10 @@ CUSTOM_CSS = """
         background: #ffffff !important;
     }
     .stTextInput > div > div {
-        border-color: transparent !important;
-        border-radius: 10px !important;
-        background: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        padding: 0 !important;
     }
     .stTextInput input {
         border: 1.5px solid #d4cef0 !important;
