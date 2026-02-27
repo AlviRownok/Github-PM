@@ -342,52 +342,22 @@ CUSTOM_CSS = """
     }
 
     /* ─── Dataframe / Table / GlideDataEditor Overrides ─── */
-    div[data-testid="stDataFrame"] th {
-        background: #7c5cfc !important;
-        color: #fff !important;
-    }
-    div[data-testid="stDataFrame"] td {
-        color: #374151 !important;
-        background: #ffffff !important;
-    }
-    /* GlideDataEditor — override dark/black cells & headers */
-    .dvn-scroller,
-    .stDataFrameGlideDataEditor,
-    div[data-testid="stDataFrame"] > div {
-        background-color: #ffffff !important;
-    }
-    .dvn-scroller canvas { filter: none !important; }
-    /* Glide header row */
-    .gdg-header, .gdg-header-cell {
-        background: #f5f3ff !important;
-        color: #1a1040 !important;
-    }
-    /* Glide cell text and grid lines */
-    .gdg-cell {
-        color: #374151 !important;
-        border-color: #e4e0f0 !important;
-    }
-    /* Ensure any inner scroll container is white not black */
-    .dvn-scroll-inner {
-        background-color: #ffffff !important;
-    }
-    /* Override Streamlit's dark data-editor theme variables */
     div[data-testid="stDataFrame"] {
-        --gdg-bg-cell: #ffffff !important;
-        --gdg-bg-cell-medium: #faf9ff !important;
-        --gdg-bg-header: #f5f3ff !important;
-        --gdg-bg-header-has-focus: #ede9fe !important;
-        --gdg-bg-header-hovered: #ede9fe !important;
-        --gdg-text-dark: #374151 !important;
-        --gdg-text-medium: #6b7280 !important;
-        --gdg-text-light: #9ca3af !important;
-        --gdg-text-header: #1a1040 !important;
-        --gdg-border-color: #e4e0f0 !important;
-        --gdg-accent-color: #7c5cfc !important;
-        --gdg-accent-light: rgba(124,92,252,0.15) !important;
-        --gdg-bg-bubble: #f5f3ff !important;
-        --gdg-bg-bubble-selected: #ede9fe !important;
-        --gdg-link-color: #7c5cfc !important;
+        --gdg-bg-cell: #ffffff;
+        --gdg-bg-cell-medium: #faf9ff;
+        --gdg-bg-header: #f0eeff;
+        --gdg-bg-header-has-focus: #ede9fe;
+        --gdg-bg-header-hovered: #ede9fe;
+        --gdg-text-dark: #1f2937;
+        --gdg-text-medium: #4b5563;
+        --gdg-text-light: #6b7280;
+        --gdg-text-header: #1a1040;
+        --gdg-border-color: #e4e0f0;
+        --gdg-accent-color: #7c5cfc;
+        --gdg-accent-light: rgba(124,92,252,0.15);
+        --gdg-bg-bubble: #f5f3ff;
+        --gdg-bg-bubble-selected: #ede9fe;
+        --gdg-link-color: #7c5cfc;
     }
 
     /* ─── Expanders & Tabs ─── */
