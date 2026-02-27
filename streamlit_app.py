@@ -104,8 +104,15 @@ FILE_CLASS_MAP = {
                     ".scala", ".r", ".m", ".vue", ".svelte"},
     "Configuration": {".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
                       ".env", ".properties", ".xml"},
-    "Documentation": {".md", ".rst", ".txt", ".doc", ".pdf", ".adoc"},
-    "Data": {".csv", ".sql", ".db", ".sqlite", ".parquet", ".jsonl"},
+    "Documentation": {".md", ".rst", ".txt", ".doc", ".docx", ".pdf", ".adoc",
+                       ".odt", ".rtf"},
+    "Models": {".pt", ".pth", ".onnx", ".h5", ".hdf5", ".pb", ".tflite",
+               ".safetensors", ".ckpt", ".bin", ".pkl", ".joblib",
+               ".mlmodel", ".pmml", ".mar", ".savedmodel"},
+    "Database": {".sql", ".db", ".sqlite", ".dump", ".bak", ".mdf", ".ldf",
+                  ".accdb", ".mdb"},
+    "Data": {".csv", ".parquet", ".jsonl", ".tsv", ".xls", ".xlsx",
+              ".feather", ".arrow", ".avro"},
     "Web Assets": {".html", ".css", ".scss", ".less", ".svg", ".png", ".jpg",
                    ".jpeg", ".gif", ".ico", ".woff", ".woff2", ".ttf"},
     "Testing": set(),
@@ -440,12 +447,21 @@ def _parse_url(url: str):
 
 
 def _classify_file(path: str) -> str:
-    name = path.lower().split("/")[-1]
+    low = path.lower()
+    name = low.split("/")[-1]
     ext = "." + name.rsplit(".", 1)[-1] if "." in name else ""
+    # Path-based rules (folders)
+    parts = low.split("/")
+    if any(p in ("sql", "database", "db", "migrations", "backup", "backups") for p in parts[:-1]):
+        return "Database"
+    if any(p in ("models", "weights", "checkpoints") for p in parts[:-1]):
+        return "Models"
+    # Name-based patterns
     for cls, pats in FILE_NAME_PATTERNS.items():
         for pat in pats:
             if pat in name:
                 return cls
+    # Extension-based
     for cls, exts in FILE_CLASS_MAP.items():
         if ext in exts:
             return cls
