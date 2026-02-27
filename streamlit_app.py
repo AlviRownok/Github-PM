@@ -284,6 +284,11 @@ CUSTOM_CSS = """
     /* ─── Charts & DataFrames ─── */
     .stPlotlyChart { border:1px solid #e4e0f0; border-radius:14px; overflow:hidden;
                      box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+    /* Plotly modebar icons — dark on light background */
+    .stPlotlyChart .modebar-btn path { fill: #6b7280 !important; }
+    .stPlotlyChart .modebar-btn:hover path { fill: #7c5cfc !important; }
+    .stPlotlyChart .modebar-group { background: rgba(250,249,255,0.85) !important; border-radius: 6px; }
+    .stPlotlyChart .modebar { right: 8px !important; top: 4px !important; }
     div[data-testid="stDataFrame"] { border:1px solid #e4e0f0; border-radius:10px; overflow:hidden; }
 
     /* ─── Buttons ─── */
@@ -336,13 +341,53 @@ CUSTOM_CSS = """
         color: #4a3d8f !important; font-weight: 500 !important;
     }
 
-    /* ─── Dataframe / Table Overrides ─── */
+    /* ─── Dataframe / Table / GlideDataEditor Overrides ─── */
     div[data-testid="stDataFrame"] th {
         background: #7c5cfc !important;
         color: #fff !important;
     }
     div[data-testid="stDataFrame"] td {
         color: #374151 !important;
+        background: #ffffff !important;
+    }
+    /* GlideDataEditor — override dark/black cells & headers */
+    .dvn-scroller,
+    .stDataFrameGlideDataEditor,
+    div[data-testid="stDataFrame"] > div {
+        background-color: #ffffff !important;
+    }
+    .dvn-scroller canvas { filter: none !important; }
+    /* Glide header row */
+    .gdg-header, .gdg-header-cell {
+        background: #f5f3ff !important;
+        color: #1a1040 !important;
+    }
+    /* Glide cell text and grid lines */
+    .gdg-cell {
+        color: #374151 !important;
+        border-color: #e4e0f0 !important;
+    }
+    /* Ensure any inner scroll container is white not black */
+    .dvn-scroll-inner {
+        background-color: #ffffff !important;
+    }
+    /* Override Streamlit's dark data-editor theme variables */
+    div[data-testid="stDataFrame"] {
+        --gdg-bg-cell: #ffffff !important;
+        --gdg-bg-cell-medium: #faf9ff !important;
+        --gdg-bg-header: #f5f3ff !important;
+        --gdg-bg-header-has-focus: #ede9fe !important;
+        --gdg-bg-header-hovered: #ede9fe !important;
+        --gdg-text-dark: #374151 !important;
+        --gdg-text-medium: #6b7280 !important;
+        --gdg-text-light: #9ca3af !important;
+        --gdg-text-header: #1a1040 !important;
+        --gdg-border-color: #e4e0f0 !important;
+        --gdg-accent-color: #7c5cfc !important;
+        --gdg-accent-light: rgba(124,92,252,0.15) !important;
+        --gdg-bg-bubble: #f5f3ff !important;
+        --gdg-bg-bubble-selected: #ede9fe !important;
+        --gdg-link-color: #7c5cfc !important;
     }
 
     /* ─── Expanders & Tabs ─── */
@@ -444,8 +489,9 @@ def _plotly_layout(height=260, **kw):
         yaxis=dict(gridcolor="#f0eeff", linecolor="#e4e0f0",
                    title_font=dict(color="#1a1040", size=12),
                    tickfont=dict(color="#374151", size=11)),
-        legend=dict(font=dict(color="#1f2937", size=11)),
-        margin=dict(l=0, r=0, t=10, b=0), height=height,
+        legend=dict(font=dict(color="#1f2937", size=11),
+                    bgcolor="rgba(255,255,255,0.8)", bordercolor="#e4e0f0", borderwidth=1),
+        margin=dict(l=50, r=16, t=28, b=44), height=height,
         colorway=["#7c5cfc", "#2070e0", "#c070e0", "#f0a080", "#70d0f0",
                   "#10b981", "#f59e0b", "#ef4444", "#b0a0f0"],
     )
@@ -1336,9 +1382,12 @@ def page_author_intelligence(D):
             if enriched:
                 df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
                 df.columns = ["Date", "Additions", "Deletions"]
-                fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
-                             color_discrete_sequence=["#10b981", "#ef4444"])
-                fig.update_layout(**_plotly_layout(280))
+                fig = go.Figure()
+                fig.add_trace(go.Bar(x=df["Date"], y=df["Additions"], name="Additions",
+                                     marker_color="#10b981"))
+                fig.add_trace(go.Bar(x=df["Date"], y=df["Deletions"], name="Deletions",
+                                     marker_color="#ef4444"))
+                fig.update_layout(**_plotly_layout(280), barmode="group")
                 st.plotly_chart(fig, use_container_width=True, key="ai_changes")
 
         # --- Row 2: File Classification Pie & File Extension Pie ---
@@ -2072,9 +2121,12 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             return None
         df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
         df.columns = ["Date", "Additions", "Deletions"]
-        fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
-                     color_discrete_sequence=["#10b981", "#ef4444"])
-        fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=df["Date"], y=df["Additions"], name="Additions",
+                             marker_color="#10b981"))
+        fig.add_trace(go.Bar(x=df["Date"], y=df["Deletions"], name="Deletions",
+                             marker_color="#ef4444"))
+        fig.update_layout(**_chart_layout("Code Changes per Commit", 400), barmode="group")
         return _fig_to_png_bytes(fig, 900, 400)
     _try_chart("code_changes", _c2)
 
