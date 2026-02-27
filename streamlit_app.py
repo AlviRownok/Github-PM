@@ -370,17 +370,22 @@ CUSTOM_CSS = """
         background: #ffffff !important;
     }
     .stTextInput > div > div {
+        border-color: #d4cef0 !important;
+        border-radius: 10px !important;
+        background: #ffffff !important;
+    }
+    .stMainBlockContainer .stTextInput > div > div {
         border: none !important;
         box-shadow: none !important;
         background: transparent !important;
         padding: 0 !important;
     }
-    .stTextInput input {
+    .stMainBlockContainer .stTextInput input {
         border: 1.5px solid #d4cef0 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
     }
-    .stTextInput input:focus {
+    .stMainBlockContainer .stTextInput input:focus {
         border-color: #7c5cfc !important;
         box-shadow: 0 0 0 1px #7c5cfc !important;
     }
