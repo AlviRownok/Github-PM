@@ -650,11 +650,19 @@ def collect_branch_data(owner, repo, branch):
             compare = _fetch_compare(owner, repo, default_branch, branch)
             compare_shas = {c.get("sha") for c in compare.get("commits", []) if c.get("sha")}
             ahead_by = compare.get("ahead_by", 0)
+            merge_base_sha = (compare.get("merge_base_commit") or {}).get("sha")
             if compare_shas and len(compare_shas) >= ahead_by:
                 # Compare API gave us the full set of unique commits
                 raw_commits = [c for c in all_commits if c.get("sha") in compare_shas]
+            elif merge_base_sha:
+                # Compare API truncated; walk from tip to merge-base
+                raw_commits = []
+                for c in all_commits:
+                    if c.get("sha") == merge_base_sha:
+                        break
+                    raw_commits.append(c)
             else:
-                # Compare API truncated (>250 commits); fall back to SHA exclusion
+                # Fallback to SHA exclusion
                 default_shas = _fetch_default_shas(owner, repo, default_branch)
                 raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
         except Exception:
@@ -1320,7 +1328,7 @@ def _build_author_file_analysis(enriched):
 
 def page_author_intelligence(D):
     _section_hdr("Author Intelligence",
-                 "Deep analysis of individual contributor activity on the branch")
+                 f"Deep analysis of individual contributor activity on <b>{D['branch']}</b> branch")
 
     astats = D["author_stats"]
     if not astats:
