@@ -2219,7 +2219,8 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
                      color_discrete_sequence=["#c070e0"])
         h = max(400, 60 + len(top_files) * 28)
         fig.update_layout(**_chart_layout("Top Files by Commit Frequency", h))
-        fig.update_layout(yaxis=dict(autorange="reversed"))
+        fig.update_layout(yaxis=dict(autorange="reversed", title_text=""),
+                          margin=dict(l=200, r=30, t=50, b=65))
         return _fig_to_png_bytes(fig, 900, h)
     _try_chart("top_files", _c5)
 
@@ -2234,7 +2235,9 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
                      color="churn", color_continuous_scale="YlOrRd")
         h = max(400, 60 + len(top_churn) * 28)
         fig.update_layout(**_chart_layout("Top Files by Code Churn", h))
-        fig.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
+        fig.update_layout(yaxis=dict(autorange="reversed", title_text=""),
+                          margin=dict(l=200, r=30, t=50, b=65),
+                          coloraxis_showscale=False)
         return _fig_to_png_bytes(fig, 900, h)
     _try_chart("top_churn", _c6)
 
