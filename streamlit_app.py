@@ -1690,7 +1690,7 @@ def page_project_timeline(D):
                 "type": "initial",
                 "date": init_date.isoformat(),
                 "reason": "Original project deadline",
-                "created_at": dt.datetime.utcnow().isoformat(),
+                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             })
             try:
                 resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
@@ -1737,7 +1737,7 @@ def page_project_timeline(D):
                     "type": "extension",
                     "date": ext_date.isoformat(),
                     "reason": ext_reason.strip(),
-                    "created_at": dt.datetime.utcnow().isoformat(),
+                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 })
                 try:
                     resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
@@ -1850,22 +1850,29 @@ def page_project_timeline(D):
             showlegend=True,
         )
 
-        # Deadline markers
-        fig.add_vline(x=dt.datetime.combine(init_dt, dt.time(0)), line_width=2,
-                      line_dash="dash", line_color="#ef4444",
-                      annotation_text="Deadline", annotation_position="top")
+        # Deadline markers — use add_shape + add_annotation to avoid Plotly bug
+        # with annotation_text on datetime axes
+        _deadline_x = init_dt.isoformat()
+        fig.add_shape(type="line", x0=_deadline_x, x1=_deadline_x, y0=0, y1=1,
+                      yref="paper", line=dict(color="#ef4444", width=2, dash="dash"))
+        fig.add_annotation(x=_deadline_x, y=1, yref="paper", text="Deadline",
+                           showarrow=False, font=dict(color="#ef4444", size=11),
+                           yshift=10)
         for ext in extensions:
             try:
-                ext_dt_val = dt.date.fromisoformat(ext["date"])
-                fig.add_vline(x=dt.datetime.combine(ext_dt_val, dt.time(0)), line_width=1,
-                              line_dash="dot", line_color="#f0a080")
+                _ext_x = ext["date"]
+                fig.add_shape(type="line", x0=_ext_x, x1=_ext_x, y0=0, y1=1,
+                              yref="paper", line=dict(color="#f0a080", width=1, dash="dot"))
             except Exception:
                 pass
 
         # Today marker
-        fig.add_vline(x=dt.datetime.combine(today, dt.time(0)), line_width=2,
-                      line_dash="solid", line_color="#10b981",
-                      annotation_text="Today", annotation_position="top")
+        _today_x = today.isoformat()
+        fig.add_shape(type="line", x0=_today_x, x1=_today_x, y0=0, y1=1,
+                      yref="paper", line=dict(color="#10b981", width=2))
+        fig.add_annotation(x=_today_x, y=1, yref="paper", text="Today",
+                           showarrow=False, font=dict(color="#10b981", size=11),
+                           yshift=10)
 
         st.plotly_chart(fig, width='stretch', key="tl_gantt")
 
