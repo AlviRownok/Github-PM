@@ -284,11 +284,8 @@ CUSTOM_CSS = """
     /* ─── Charts & DataFrames ─── */
     .stPlotlyChart { border:1px solid #e4e0f0; border-radius:14px; overflow:hidden;
                      box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
-    /* Plotly modebar icons — dark on light background */
-    .stPlotlyChart .modebar-btn path { fill: #6b7280 !important; }
-    .stPlotlyChart .modebar-btn:hover path { fill: #7c5cfc !important; }
-    .stPlotlyChart .modebar-group { background: rgba(250,249,255,0.85) !important; border-radius: 6px; }
-    .stPlotlyChart .modebar { right: 8px !important; top: 4px !important; }
+    /* Hide Plotly modebar (toolbar icons) */
+    .stPlotlyChart .modebar-container { display: none !important; }
     div[data-testid="stDataFrame"] { border:1px solid #e4e0f0; border-radius:10px; overflow:hidden; }
 
     /* ─── Buttons ─── */
@@ -334,7 +331,13 @@ CUSTOM_CSS = """
     .stDateInput > div > div {
         border-color: #d4cef0 !important;
         border-radius: 10px !important;
-        color: #374151 !important;
+        background: #ffffff !important;
+    }
+    .stSelectbox > div > div > div[data-baseweb="select"] span,
+    .stSelectbox [data-baseweb="select"] .st-eh,
+    .stSelectbox [data-baseweb="select"] div[value] {
+        color: #1a1040 !important;
+        font-weight: 500 !important;
     }
     .stSelectbox label, .stMultiSelect label, .stTextInput label,
     .stNumberInput label, .stDateInput label, .stTextArea label {
