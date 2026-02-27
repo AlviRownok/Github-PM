@@ -145,7 +145,32 @@ CUSTOM_CSS = """
         padding-right: 2rem !important;
         max-width: 100% !important;
     }
-    header[data-testid="stHeader"] { background: rgba(255,255,255,0.85) !important; backdrop-filter: blur(12px); }
+    header[data-testid="stHeader"] {
+        background: linear-gradient(135deg, #7c5cfc, #b0a0f0) !important;
+        backdrop-filter: blur(12px);
+        height: 3.5rem !important;
+    }
+    div[data-testid="stToolbar"] {
+        height: 3.5rem !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    div[data-testid="stToolbar"] button,
+    div[data-testid="stToolbar"] svg,
+    header[data-testid="stHeader"] button,
+    header[data-testid="stHeader"] svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    div[data-testid="stToolbar"] button:hover,
+    header[data-testid="stHeader"] button:hover {
+        background: rgba(255,255,255,0.18) !important;
+        color: #ffffff !important;
+    }
+    div[data-testid="stMainMenu"] button svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
 
     /* ─── Animations ─── */
     @keyframes fadeInUp {
