@@ -579,17 +579,21 @@ def _gh_put(path: str, payload: dict):
 # ── Timeline CSV helpers (GitHub-backed persistence) ──
 
 _TIMELINE_DIR = ".gam-pm"
+_PM_REPO_OWNER = "AlviRownok"
+_PM_REPO_NAME = "Github-PM"
+_PM_REPO_BRANCH = "main"
 
 
 def _timeline_path(owner, repo, branch):
-    safe_branch = branch.replace("/", "_")
-    return f"{_TIMELINE_DIR}/timeline_{safe_branch}.csv"
+    safe = f"{owner}_{repo}_{branch}".replace("/", "_")
+    return f"{_TIMELINE_DIR}/timeline_{safe}.csv"
 
 
 def _read_timeline_csv(owner, repo, branch):
-    """Read the timeline CSV from GitHub. Returns (rows_list, sha_of_file)."""
+    """Read the timeline CSV from the PM repo on GitHub. Returns (rows_list, sha_of_file)."""
     fpath = _timeline_path(owner, repo, branch)
-    data = _gh_get(f"/repos/{owner}/{repo}/contents/{fpath}", {"ref": branch})
+    data = _gh_get(f"/repos/{_PM_REPO_OWNER}/{_PM_REPO_NAME}/contents/{fpath}",
+                   {"ref": _PM_REPO_BRANCH})
     if not data or "content" not in data:
         return [], None
     content = base64.b64decode(data["content"]).decode("utf-8")
@@ -603,7 +607,7 @@ def _read_timeline_csv(owner, repo, branch):
 
 
 def _write_timeline_csv(owner, repo, branch, rows, file_sha=None):
-    """Write the timeline CSV to GitHub via the Contents API."""
+    """Write the timeline CSV to the PM repo on GitHub."""
     import csv as _csv
     buf = io.StringIO()
     fieldnames = ["type", "date", "reason", "created_at"]
@@ -614,13 +618,13 @@ def _write_timeline_csv(owner, repo, branch, rows, file_sha=None):
     encoded = base64.b64encode(buf.getvalue().encode("utf-8")).decode("utf-8")
     fpath = _timeline_path(owner, repo, branch)
     payload = {
-        "message": f"[GAM-PM] Update project timeline ({branch})",
+        "message": f"[GAM-PM] Update timeline for {owner}/{repo}@{branch}",
         "content": encoded,
-        "branch": branch,
+        "branch": _PM_REPO_BRANCH,
     }
     if file_sha:
         payload["sha"] = file_sha
-    return _gh_put(f"/repos/{owner}/{repo}/contents/{fpath}", payload)
+    return _gh_put(f"/repos/{_PM_REPO_OWNER}/{_PM_REPO_NAME}/contents/{fpath}", payload)
 
 
 def _gh_paginated(path: str, params=None, max_pages=10):
