@@ -328,12 +328,17 @@ def _fetch_tree(owner, repo, branch):
     return _gh_get(f"/repos/{owner}/{repo}/git/trees/{branch}", {"recursive": "1"}) or {}
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def _fetch_commits(owner, repo, branch, max_pages=5):
+def _fetch_commits(owner, repo, branch, max_pages=10):
     return _gh_paginated(f"/repos/{owner}/{repo}/commits", {"sha": branch}, max_pages=max_pages)
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+def _fetch_compare(owner, repo, base, head):
+    """Use the compare API to get commits unique to head vs base."""
+    return _gh_get(f"/repos/{owner}/{repo}/compare/{base}...{head}") or {}
+
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _fetch_default_shas(owner, repo, default_branch):
-    cs = _gh_paginated(f"/repos/{owner}/{repo}/commits", {"sha": default_branch}, max_pages=3)
+    cs = _gh_paginated(f"/repos/{owner}/{repo}/commits", {"sha": default_branch}, max_pages=10)
     return {c.get("sha") for c in cs if c.get("sha")}
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
@@ -386,11 +391,23 @@ def collect_branch_data(owner, repo, branch):
             f"Available branches: {', '.join(branch_names[:15])}"
         )
 
-    # Commits
+    # Commits — use compare API for accurate branch-only commits
     all_commits = _fetch_commits(owner, repo, branch)
     if branch != default_branch:
-        default_shas = _fetch_default_shas(owner, repo, default_branch)
-        raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
+        try:
+            compare = _fetch_compare(owner, repo, default_branch, branch)
+            compare_shas = {c.get("sha") for c in compare.get("commits", []) if c.get("sha")}
+            ahead_by = compare.get("ahead_by", 0)
+            if compare_shas and len(compare_shas) >= ahead_by:
+                # Compare API gave us the full set of unique commits
+                raw_commits = [c for c in all_commits if c.get("sha") in compare_shas]
+            else:
+                # Compare API truncated (>250 commits); fall back to SHA exclusion
+                default_shas = _fetch_default_shas(owner, repo, default_branch)
+                raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
+        except Exception:
+            default_shas = _fetch_default_shas(owner, repo, default_branch)
+            raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
     else:
         raw_commits = all_commits
 
@@ -1789,35 +1806,40 @@ Repository: {{ owner }}/{{ repo }} &middot; Branch: {{ branch }}</div>
 
 _AUTHOR_TPL = None  # PDF-based now; kept as placeholder
 
-def _fig_to_png_bytes(fig, width=700, height=350):
+def _fig_to_png_bytes(fig, width=800, height=400):
     """Convert a Plotly figure to PNG bytes for PDF embedding."""
     try:
-        return fig.to_image(format="png", width=width, height=height,
-                            scale=2, engine="kaleido")
+        return fig.to_image(format="png", width=width, height=height, scale=2)
     except Exception:
-        # Fallback: kaleido not available — skip chart
         return None
+
+
+def _chart_layout(title="", height=400):
+    """Consistent dark chart layout for PDF export."""
+    return dict(
+        paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+        font=dict(family="Arial, Helvetica, sans-serif", color="#e2e8f0", size=13),
+        xaxis=dict(gridcolor="#1e293b", title_font_size=12, tickfont_size=11),
+        yaxis=dict(gridcolor="#1e293b", title_font_size=12, tickfont_size=11),
+        margin=dict(l=65, r=30, t=50, b=65),
+        title=dict(text=title, font=dict(size=16, color="#f1f5f9"), x=0.5, xanchor="center"),
+        height=height,
+        legend=dict(font=dict(size=11)),
+    )
 
 
 def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files, top_churn):
     """Build chart PNG images for PDF embedding. Returns dict of name->bytes."""
     charts = {}
-    dark_layout = dict(
-        paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
-        font=dict(color="#e2e8f0", size=12),
-        xaxis=dict(gridcolor="#1e293b"), yaxis=dict(gridcolor="#1e293b"),
-        margin=dict(l=60, r=20, t=40, b=60),
-    )
 
     # 1) Daily Activity
     try:
         dc = Counter(c["date_day"] for c in ac)
         if dc:
             df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
-            fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#6366f1"],
-                         title="Daily Commit Activity")
-            fig.update_layout(**dark_layout, height=350)
-            img = _fig_to_png_bytes(fig)
+            fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#6366f1"])
+            fig.update_layout(**_chart_layout("Daily Commit Activity", 400))
+            img = _fig_to_png_bytes(fig, 900, 400)
             if img:
                 charts["daily_activity"] = img
     except Exception:
@@ -1829,10 +1851,9 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
             df.columns = ["Date", "Additions", "Deletions"]
             fig = px.bar(df, x="Date", y=["Additions", "Deletions"], barmode="group",
-                         color_discrete_sequence=["#22c55e", "#ef4444"],
-                         title="Code Changes per Commit")
-            fig.update_layout(**dark_layout, height=350)
-            img = _fig_to_png_bytes(fig)
+                         color_discrete_sequence=["#22c55e", "#ef4444"])
+            fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
+            img = _fig_to_png_bytes(fig, 900, 400)
             if img:
                 charts["code_changes"] = img
     except Exception:
@@ -1843,11 +1864,10 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         if cls_counter:
             df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
             fig = px.pie(df, values="Count", names="Classification",
-                         color_discrete_sequence=px.colors.qualitative.Set2,
-                         hole=0.4, title="Files by Classification")
-            fig.update_layout(**dark_layout, height=400)
-            fig.update_traces(textinfo="label+percent", textfont_size=12)
-            img = _fig_to_png_bytes(fig, 600, 400)
+                         color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4)
+            fig.update_layout(**_chart_layout("Files by Classification", 450))
+            fig.update_traces(textinfo="label+percent", textfont_size=13)
+            img = _fig_to_png_bytes(fig, 750, 450)
             if img:
                 charts["file_class_pie"] = img
     except Exception:
@@ -1858,11 +1878,10 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         if ext_counter:
             df = pd.DataFrame(ext_counter.most_common(12), columns=["Extension", "Count"])
             fig = px.pie(df, values="Count", names="Extension",
-                         color_discrete_sequence=px.colors.qualitative.Pastel,
-                         hole=0.4, title="Files by Extension")
-            fig.update_layout(**dark_layout, height=400)
-            fig.update_traces(textinfo="label+percent", textfont_size=12)
-            img = _fig_to_png_bytes(fig, 600, 400)
+                         color_discrete_sequence=px.colors.qualitative.Pastel, hole=0.4)
+            fig.update_layout(**_chart_layout("Files by Extension", 450))
+            fig.update_traces(textinfo="label+percent", textfont_size=13)
+            img = _fig_to_png_bytes(fig, 750, 450)
             if img:
                 charts["file_ext_pie"] = img
     except Exception:
@@ -1875,12 +1894,11 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df.columns = ["File", "Commits"]
             df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
             fig = px.bar(df, x="Commits", y="File", orientation="h",
-                         color_discrete_sequence=["#8b5cf6"],
-                         title="Top Files by Commit Frequency")
-            h = max(350, 40 + len(top_files) * 25)
-            fig.update_layout(**dark_layout, height=h)
+                         color_discrete_sequence=["#8b5cf6"])
+            h = max(400, 60 + len(top_files) * 28)
+            fig.update_layout(**_chart_layout("Top Files by Commit Frequency", h))
             fig.update_layout(yaxis=dict(autorange="reversed"))
-            img = _fig_to_png_bytes(fig, 700, h)
+            img = _fig_to_png_bytes(fig, 900, h)
             if img:
                 charts["top_files"] = img
     except Exception:
@@ -1893,12 +1911,11 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df["churn"] = df["additions"] + df["deletions"]
             df["short"] = df["filename"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
             fig = px.bar(df, x="churn", y="short", orientation="h",
-                         color="churn", color_continuous_scale="YlOrRd",
-                         title="Top Files by Code Churn (Lines Changed)")
-            h = max(350, 40 + len(top_churn) * 25)
-            fig.update_layout(**dark_layout, height=h, coloraxis_showscale=False)
-            fig.update_layout(yaxis=dict(autorange="reversed"))
-            img = _fig_to_png_bytes(fig, 700, h)
+                         color="churn", color_continuous_scale="YlOrRd")
+            h = max(400, 60 + len(top_churn) * 28)
+            fig.update_layout(**_chart_layout("Top Files by Code Churn", h))
+            fig.update_layout(yaxis=dict(autorange="reversed"), coloraxis_showscale=False)
+            img = _fig_to_png_bytes(fig, 900, h)
             if img:
                 charts["top_churn"] = img
     except Exception:
@@ -1917,13 +1934,13 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df = pd.DataFrame(cum_data)
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df["Date"], y=df["Added"], mode="lines",
-                                     name="Cumulative +", line=dict(color="#22c55e", width=2)))
+                                     name="Cumulative +", line=dict(color="#22c55e", width=2.5)))
             fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
-                                     name="Cumulative −", line=dict(color="#ef4444", width=2)))
+                                     name="Cumulative −", line=dict(color="#ef4444", width=2.5)))
             fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
-                                     name="Net", line=dict(color="#3b82f6", width=2, dash="dot")))
-            fig.update_layout(**dark_layout, height=350, title="Cumulative Lines Over Time")
-            img = _fig_to_png_bytes(fig)
+                                     name="Net", line=dict(color="#3b82f6", width=2.5, dash="dot")))
+            fig.update_layout(**_chart_layout("Cumulative Lines Over Time", 400))
+            img = _fig_to_png_bytes(fig, 900, 400)
             if img:
                 charts["cumulative"] = img
     except Exception:
@@ -1937,10 +1954,9 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             df = pd.DataFrame([(d, dow_counter.get(d, 0)) for d in days_of_week],
                               columns=["Day", "Commits"])
             fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f59e0b"],
-                         category_orders={"Day": days_of_week},
-                         title="Commits by Day of Week")
-            fig.update_layout(**dark_layout, height=300)
-            img = _fig_to_png_bytes(fig, 600, 300)
+                         category_orders={"Day": days_of_week})
+            fig.update_layout(**_chart_layout("Commits by Day of Week", 380))
+            img = _fig_to_png_bytes(fig, 750, 380)
             if img:
                 charts["day_of_week"] = img
     except Exception:
@@ -1952,10 +1968,9 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             sizes = [e["additions"] + e["deletions"] for e in enriched]
             fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
                                x="Lines Changed", nbins=30,
-                               color_discrete_sequence=["#6366f1"],
-                               title="Commit Size Distribution")
-            fig.update_layout(**dark_layout, height=300)
-            img = _fig_to_png_bytes(fig, 700, 300)
+                               color_discrete_sequence=["#6366f1"])
+            fig.update_layout(**_chart_layout("Commit Size Distribution", 380))
+            img = _fig_to_png_bytes(fig, 900, 380)
             if img:
                 charts["size_dist"] = img
     except Exception:
@@ -1965,14 +1980,8 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
 
 
 def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
-    """Generate a comprehensive author report as PDF bytes."""
+    """Generate a comprehensive, professional author report as PDF bytes."""
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=18 * mm, rightMargin=18 * mm,
-        topMargin=15 * mm, bottomMargin=15 * mm,
-    )
-    W = A4[0] - 36 * mm  # usable width
 
     # Colors
     BG = HexColor("#0f172a")
@@ -1981,78 +1990,128 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
     TEXT = HexColor("#e2e8f0")
     MUTED = HexColor("#94a3b8")
     ACCENT = HexColor("#6366f1")
-    GREEN = HexColor("#22c55e")
-    RED = HexColor("#ef4444")
-    BLUE = HexColor("#3b82f6")
     WHITE = HexColor("#f1f5f9")
+    HEADER_BG = HexColor("#1e1b4b")
 
-    # Styles
-    sTitle = ParagraphStyle("Title", fontName="Helvetica-Bold", fontSize=20,
-                            textColor=WHITE, spaceAfter=4)
+    # Page dimensions
+    PW, PH = A4
+    L_MARGIN = 20 * mm
+    R_MARGIN = 20 * mm
+    T_MARGIN = 22 * mm
+    B_MARGIN = 22 * mm
+    W = PW - L_MARGIN - R_MARGIN
+
+    # ── Page template with background, header line & page numbers ──
+    _page_count = [0]
+
+    def _on_page(canvas, doc):
+        _page_count[0] += 1
+        canvas.saveState()
+        # Dark background
+        canvas.setFillColor(BG)
+        canvas.rect(0, 0, PW, PH, fill=1, stroke=0)
+        # Top accent bar
+        canvas.setFillColor(ACCENT)
+        canvas.rect(0, PH - 3 * mm, PW, 3 * mm, fill=1, stroke=0)
+        # Footer line
+        canvas.setStrokeColor(BORDER)
+        canvas.setLineWidth(0.5)
+        canvas.line(L_MARGIN, B_MARGIN - 6 * mm, PW - R_MARGIN, B_MARGIN - 6 * mm)
+        # Footer text
+        canvas.setFillColor(MUTED)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.drawString(L_MARGIN, B_MARGIN - 10 * mm,
+                          f"GitHub PM — ISO 27001 Compliance Platform")
+        canvas.drawRightString(PW - R_MARGIN, B_MARGIN - 10 * mm,
+                               f"Page {_page_count[0]}")
+        canvas.drawCentredString(PW / 2, B_MARGIN - 10 * mm,
+                                 f"{rd['owner']}/{rd['repo']} · {rd['branch']}")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=L_MARGIN, rightMargin=R_MARGIN,
+        topMargin=T_MARGIN, bottomMargin=B_MARGIN,
+    )
+
+    # ── Paragraph Styles (generous spacing) ──
+    sTitle = ParagraphStyle("Title", fontName="Helvetica-Bold", fontSize=22,
+                            textColor=WHITE, leading=28, spaceAfter=6)
     sSub = ParagraphStyle("Sub", fontName="Helvetica", fontSize=10,
-                          textColor=MUTED, spaceAfter=16)
+                          textColor=MUTED, leading=15, spaceAfter=20)
     sH2 = ParagraphStyle("H2", fontName="Helvetica-Bold", fontSize=14,
-                         textColor=WHITE, spaceBefore=18, spaceAfter=8)
-    sH3 = ParagraphStyle("H3", fontName="Helvetica-Bold", fontSize=11,
-                         textColor=HexColor("#a5b4fc"), spaceBefore=12, spaceAfter=6)
+                         textColor=WHITE, leading=20, spaceBefore=24, spaceAfter=12)
+    sH3 = ParagraphStyle("H3", fontName="Helvetica-Bold", fontSize=10.5,
+                         textColor=HexColor("#a5b4fc"), leading=15,
+                         spaceBefore=14, spaceAfter=8)
     sBody = ParagraphStyle("Body", fontName="Helvetica", fontSize=9,
-                           textColor=TEXT, leading=13)
-    sSmall = ParagraphStyle("Small", fontName="Helvetica", fontSize=7.5,
-                            textColor=MUTED, leading=10)
-    sFooter = ParagraphStyle("Footer", fontName="Helvetica", fontSize=7,
-                             textColor=MUTED, alignment=TA_CENTER)
+                           textColor=TEXT, leading=14, spaceAfter=6)
+    sCell = ParagraphStyle("Cell", fontName="Helvetica", fontSize=8,
+                           textColor=TEXT, leading=12)
+    sCellSmall = ParagraphStyle("CellSmall", fontName="Helvetica", fontSize=7.5,
+                                textColor=MUTED, leading=11)
+    sFooter = ParagraphStyle("Footer", fontName="Helvetica", fontSize=7.5,
+                             textColor=MUTED, alignment=TA_CENTER, leading=11)
+    sKpiLabel = ParagraphStyle("KpiLabel", fontName="Helvetica", fontSize=8,
+                               textColor=MUTED, leading=12, alignment=TA_CENTER)
+    sKpiValue = ParagraphStyle("KpiValue", fontName="Helvetica-Bold", fontSize=14,
+                               textColor=WHITE, leading=19, alignment=TA_CENTER)
 
     elements = []
 
-    # ── Title Block ──
-    elements.append(Paragraph(f"Contributor Report — {rd['author']}", sTitle))
+    # ═══ TITLE PAGE ═══
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph(f"Contributor Report", sTitle))
+    elements.append(Paragraph(f"{rd['author']}", ParagraphStyle(
+        "AuthorName", fontName="Helvetica-Bold", fontSize=18,
+        textColor=ACCENT, leading=24, spaceAfter=12)))
     elements.append(Paragraph(
-        f"{rd['owner']}/{rd['repo']} · Branch: {rd['branch']} · "
-        f"Generated: {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}", sSub))
+        f"Repository: {rd['owner']}/{rd['repo']}<br/>"
+        f"Branch: {rd['branch']}<br/>"
+        f"Report Date: {dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}<br/>"
+        f"Period: {rd['first_date']} — {rd['last_date']}", sSub))
+    elements.append(Spacer(1, 8))
 
-    # ── KPI Table ──
+    # ═══ SUMMARY METRICS ═══
     elements.append(Paragraph("Summary Metrics", sH2))
-    kpi_data = [
-        ["Commits", "Lines Added", "Lines Removed", "Net Lines"],
-        [str(rd["total_commits"]), _fnum(rd["total_additions"]),
-         _fnum(rd["total_deletions"]), _fnum(rd["net_lines"])],
-        ["Unique Files", "Days Active", "Avg Commits/Day", "First Commit"],
-        [str(rd["unique_files"]), str(rd["days_active"]),
-         rd["avg_per_day"], rd["first_date"]],
-        ["Last Commit", "Files/Commit", "", ""],
-        [rd["last_date"], f"{rd['files_changed'] / max(rd['total_commits'], 1):.1f}", "", ""],
+
+    def _kpi_cell(label, value):
+        return [Paragraph(label, sKpiLabel), Paragraph(str(value), sKpiValue)]
+
+    kpi_grid = [
+        [_kpi_cell("Total Commits", rd["total_commits"]),
+         _kpi_cell("Lines Added", _fnum(rd["total_additions"])),
+         _kpi_cell("Lines Removed", _fnum(rd["total_deletions"])),
+         _kpi_cell("Net Lines", _fnum(rd["net_lines"]))],
+        [_kpi_cell("Unique Files", rd["unique_files"]),
+         _kpi_cell("Days Active", rd["days_active"]),
+         _kpi_cell("Avg Commits/Day", rd["avg_per_day"]),
+         _kpi_cell("Files/Commit", f"{rd['files_changed'] / max(rd['total_commits'], 1):.1f}")],
     ]
+    # Flatten into table rows (label row + value row per kpi row)
+    kpi_rows = []
+    for row in kpi_grid:
+        label_row = [cells[0] for cells in row]
+        value_row = [cells[1] for cells in row]
+        kpi_rows.append(label_row)
+        kpi_rows.append(value_row)
+
     kpi_col_w = W / 4
-    kpi_table = Table(kpi_data, colWidths=[kpi_col_w] * 4)
+    kpi_table = Table(kpi_rows, colWidths=[kpi_col_w] * 4)
     kpi_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), CARD_BG),
-        ("TEXTCOLOR", (0, 0), (-1, 0), MUTED),
-        ("TEXTCOLOR", (0, 2), (-1, 2), MUTED),
-        ("TEXTCOLOR", (0, 4), (-1, 4), MUTED),
-        ("TEXTCOLOR", (0, 1), (-1, 1), WHITE),
-        ("TEXTCOLOR", (0, 3), (-1, 3), WHITE),
-        ("TEXTCOLOR", (0, 5), (-1, 5), WHITE),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica"),
-        ("FONTNAME", (0, 2), (-1, 2), "Helvetica"),
-        ("FONTNAME", (0, 4), (-1, 4), "Helvetica"),
-        ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
-        ("FONTNAME", (0, 3), (-1, 3), "Helvetica-Bold"),
-        ("FONTNAME", (0, 5), (-1, 5), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTSIZE", (0, 1), (-1, 1), 12),
-        ("FONTSIZE", (0, 3), (-1, 3), 12),
-        ("FONTSIZE", (0, 5), (-1, 5), 12),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
     elements.append(kpi_table)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 16))
 
-    # ── Charts ──
+    # ═══ CHARTS ═══
     chart_order = [
         ("daily_activity", "Daily Commit Activity"),
         ("code_changes", "Code Changes per Commit"),
@@ -2064,140 +2123,182 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         ("day_of_week", "Commits by Day of Week"),
         ("size_dist", "Commit Size Distribution"),
     ]
+
+    charts_added = 0
     for chart_key, chart_title in chart_order:
         img_bytes = chart_images.get(chart_key)
-        if img_bytes:
-            elements.append(Paragraph(chart_title, sH2))
-            img_stream = io.BytesIO(img_bytes)
-            img = RLImage(img_stream, width=W, height=W * 0.5, kind="proportional")
-            elements.append(img)
-            elements.append(Spacer(1, 8))
+        if not img_bytes:
+            continue
+        # Start a new page for every 2 charts (each chart gets good space)
+        if charts_added > 0 and charts_added % 2 == 0:
+            elements.append(PageBreak())
+        elements.append(Paragraph(chart_title, sH2))
+        img_stream = io.BytesIO(img_bytes)
+        # Use fixed dimensions that fit well on A4
+        chart_w = W
+        chart_h = W * 0.52
+        img = RLImage(img_stream, width=chart_w, height=chart_h)
+        img.hAlign = "CENTER"
+        elements.append(img)
+        elements.append(Spacer(1, 14))
+        charts_added += 1
 
-    # ── Files Touched Table ──
+    # ═══ FILES TOUCHED TABLE ═══
     if file_analysis:
         elements.append(PageBreak())
         elements.append(Paragraph("All Files Touched by Author", sH2))
+        elements.append(Paragraph(
+            f"{len(file_analysis)} unique files modified across {rd['total_commits']} commits",
+            sBody))
         fa_sorted = sorted(file_analysis.values(), key=lambda x: -x["commits"])
-        file_header = ["File Path", "Category", "Ext", "Commits", "+", "−", "Net"]
+        file_header = [
+            Paragraph("<b>File Path</b>", sCell),
+            Paragraph("<b>Category</b>", sCell),
+            Paragraph("<b>Ext</b>", sCell),
+            Paragraph("<b>Commits</b>", sCell),
+            Paragraph("<b>Lines +</b>", sCell),
+            Paragraph("<b>Lines −</b>", sCell),
+            Paragraph("<b>Net</b>", sCell),
+        ]
         file_rows = [file_header]
         for fa in fa_sorted:
             file_rows.append([
-                Paragraph(fa["filename"], sSmall),
-                fa["classification"],
-                fa["extension"],
-                str(fa["commits"]),
-                str(fa["additions"]),
-                str(fa["deletions"]),
-                str(fa["net"]),
+                Paragraph(fa["filename"], sCellSmall),
+                Paragraph(fa["classification"], sCellSmall),
+                Paragraph(fa["extension"], sCellSmall),
+                Paragraph(str(fa["commits"]), sCellSmall),
+                Paragraph(str(fa["additions"]), sCellSmall),
+                Paragraph(str(fa["deletions"]), sCellSmall),
+                Paragraph(str(fa["net"]), sCellSmall),
             ])
 
-        col_widths = [W * 0.35, W * 0.15, W * 0.08, W * 0.1, W * 0.1, W * 0.1, W * 0.1]
+        col_widths = [W * 0.34, W * 0.14, W * 0.08, W * 0.1, W * 0.1, W * 0.1, W * 0.1]
         ft = Table(file_rows, colWidths=col_widths, repeatRows=1)
         ft.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1e1b4b")),
+            ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
             ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 8),
-            ("FONTSIZE", (0, 1), (-1, -1), 7.5),
-            ("TEXTCOLOR", (0, 1), (-1, -1), TEXT),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
             ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
             ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
             ("ALIGN", (3, 0), (-1, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, HexColor("#0f172a")]),
+            ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("TOPPADDING", (0, 1), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, BG]),
         ]))
         elements.append(ft)
 
-    # ── Full Commit Log ──
+    # ═══ FULL COMMIT LOG ═══
     elements.append(PageBreak())
     elements.append(Paragraph("Complete Commit History", sH2))
     elements.append(Paragraph(
-        f"Total {len(enriched)} commits from {rd['first_date']} to {rd['last_date']}", sSub))
+        f"{len(enriched)} commits from {rd['first_date']} to {rd['last_date']}  ·  "
+        f"Branch: {rd['branch']}", sBody))
 
-    commit_header = ["SHA", "Date", "Message", "+", "−", "Files"]
+    commit_header = [
+        Paragraph("<b>SHA</b>", sCell),
+        Paragraph("<b>Date</b>", sCell),
+        Paragraph("<b>Message</b>", sCell),
+        Paragraph("<b>+</b>", sCell),
+        Paragraph("<b>−</b>", sCell),
+        Paragraph("<b>Files</b>", sCell),
+    ]
     commit_rows = [commit_header]
     for c in enriched:
         msg = c["message"]
-        if len(msg) > 80:
-            msg = msg[:77] + "..."
+        if len(msg) > 90:
+            msg = msg[:87] + "..."
         commit_rows.append([
-            c["sha"],
-            c["date_str"],
-            Paragraph(msg, sSmall),
-            str(c["additions"]),
-            str(c["deletions"]),
-            str(c["files_changed"]),
+            Paragraph(c["sha"], sCellSmall),
+            Paragraph(c["date_str"], sCellSmall),
+            Paragraph(msg, sCellSmall),
+            Paragraph(str(c["additions"]), sCellSmall),
+            Paragraph(str(c["deletions"]), sCellSmall),
+            Paragraph(str(c["files_changed"]), sCellSmall),
         ])
 
-    cc_widths = [W * 0.08, W * 0.14, W * 0.48, W * 0.08, W * 0.08, W * 0.08]
+    cc_widths = [W * 0.08, W * 0.13, W * 0.49, W * 0.08, W * 0.08, W * 0.08]
     ct = Table(commit_rows, colWidths=cc_widths, repeatRows=1)
     ct.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1e1b4b")),
+        ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
         ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 8),
-        ("FONTSIZE", (0, 1), (-1, -1), 7),
-        ("TEXTCOLOR", (0, 1), (-1, -1), TEXT),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
         ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
         ("ALIGN", (3, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, HexColor("#0f172a")]),
+        ("TOPPADDING", (0, 0), (-1, 0), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ("TOPPADDING", (0, 1), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, BG]),
     ]))
     elements.append(ct)
 
-    # ── Per-Commit File Details ──
+    # ═══ PER-COMMIT FILE DETAILS ═══
     elements.append(PageBreak())
     elements.append(Paragraph("Detailed File Changes per Commit", sH2))
+    elements.append(Paragraph(
+        "Each commit with its individual file-level additions, deletions and change status.",
+        sBody))
+
     for c in enriched:
         file_detail = c.get("_file_details", [])
         if not file_detail:
             continue
-        heading = f'<b>{c["sha"]}</b> — {c["date_str"]} — {c["message"][:60]}'
+        msg_short = c["message"][:65] + ("..." if len(c["message"]) > 65 else "")
+        heading = f'<b>{c["sha"]}</b>  ·  {c["date_str"]}  ·  {msg_short}'
         elements.append(Paragraph(heading, sH3))
-        rows = [["File", "Status", "+", "−", "Changes"]]
+
+        rows = [[
+            Paragraph("<b>File</b>", sCell),
+            Paragraph("<b>Status</b>", sCell),
+            Paragraph("<b>+</b>", sCell),
+            Paragraph("<b>−</b>", sCell),
+            Paragraph("<b>Total</b>", sCell),
+        ]]
         for fd in file_detail:
             rows.append([
-                Paragraph(fd.get("filename", ""), sSmall),
-                fd.get("status", ""),
-                str(fd.get("additions", 0)),
-                str(fd.get("deletions", 0)),
-                str(fd.get("changes", 0)),
+                Paragraph(fd.get("filename", ""), sCellSmall),
+                Paragraph(fd.get("status", ""), sCellSmall),
+                Paragraph(str(fd.get("additions", 0)), sCellSmall),
+                Paragraph(str(fd.get("deletions", 0)), sCellSmall),
+                Paragraph(str(fd.get("changes", 0)), sCellSmall),
             ])
-        fd_widths = [W * 0.45, W * 0.12, W * 0.1, W * 0.1, W * 0.1]
+        fd_widths = [W * 0.46, W * 0.12, W * 0.1, W * 0.1, W * 0.1]
         fdt = Table(rows, colWidths=fd_widths, repeatRows=1)
         fdt.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1e1b4b")),
+            ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
             ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 7),
-            ("TEXTCOLOR", (0, 1), (-1, -1), TEXT),
             ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
             ("GRID", (0, 0), (-1, -1), 0.3, BORDER),
             ("ALIGN", (2, 0), (-1, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("TOPPADDING", (0, 0), (-1, 0), 7),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 7),
+            ("TOPPADDING", (0, 1), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ]))
         elements.append(fdt)
-        elements.append(Spacer(1, 6))
+        elements.append(Spacer(1, 10))
 
-    # ── Footer ──
-    elements.append(Spacer(1, 20))
+    # ── End-of-report marker ──
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("— End of Report —", ParagraphStyle(
+        "EndMark", fontName="Helvetica-Bold", fontSize=10,
+        textColor=MUTED, alignment=TA_CENTER, leading=14)))
+    elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        f"Generated by GitHub PM · {rd['owner']}/{rd['repo']} · "
+        f"Generated by GitHub PM · ISO 27001 Compliance Platform · "
         f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}", sFooter))
-
-    # Build PDF with dark background
-    def _on_page(canvas, doc):
-        canvas.saveState()
-        canvas.setFillColor(BG)
-        canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
-        canvas.restoreState()
 
     doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
