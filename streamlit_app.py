@@ -1998,7 +1998,7 @@ def page_compliance_hub(D):
     st.markdown("---")
 
     st.markdown("#### Generate Compliance Report")
-    st.markdown("Export a comprehensive HTML document covering all ISO 27001 control evidence from this branch.")
+    st.markdown("Export a comprehensive PDF document covering all ISO 27001 control evidence from this branch.")
 
     scope = st.multiselect(
         "Report Sections",
@@ -2012,11 +2012,11 @@ def page_compliance_hub(D):
 
     if st.button("Generate Compliance Report", type="primary"):
         with st.spinner("Generating compliance report..."):
-            html = _gen_compliance_report(D, scope)
+            pdf_bytes = _gen_compliance_pdf(D, scope)
             st.download_button(
-                "Download Compliance Report (HTML)", html,
-                f"ISO27001_{D['repo']}_{D['branch']}_{dt.date.today().isoformat()}.html",
-                "text/html",
+                "Download Compliance Report (PDF)", pdf_bytes,
+                f"ISO27001_{D['repo']}_{D['branch']}_{dt.date.today().isoformat()}.pdf",
+                "application/pdf",
             )
             st.success("Report generated successfully.")
 
@@ -2243,6 +2243,359 @@ Repository: {{ owner }}/{{ repo }} &middot; Branch: {{ branch }}</div>
 
 
 _AUTHOR_TPL = None  # PDF-based now; kept as placeholder
+
+
+def _gen_compliance_pdf(D, sections):
+    """Generate ISO 27001 Compliance Report as professional PDF bytes."""
+    buf = io.BytesIO()
+
+    # ── Prepare data (same logic as _gen_compliance_report) ──
+    clsf = Counter(f["classification"] for f in D["files"])
+    classifications = sorted(clsf.items(), key=lambda x: -x[1])
+    languages = sorted(D["languages"].items(), key=lambda x: -x[1])
+
+    authors = []
+    for aid, s in D["author_stats"].items():
+        f, l = s["first"], s["last"]
+        days = (l.date() - f.date()).days + 1 if f and l else 0
+        authors.append({"id": aid, "name": s["name"], "commits": s["commits"],
+                        "first": _fmt(f, "%Y-%m-%d"), "last": _fmt(l, "%Y-%m-%d"), "days": days})
+
+    dated = [c for c in D["commits"] if c["date"]]
+    fd = _fmt(min(c["date"] for c in dated), "%Y-%m-%d") if dated else "\u2014"
+    ld = _fmt(max(c["date"] for c in dated), "%Y-%m-%d") if dated else "\u2014"
+
+    oi = [i for i in D["issues"] if i["state"] == "open"]
+    ci = [i for i in D["issues"] if i["state"] == "closed"]
+    rts = [i["resolution_days"] for i in ci if i["resolution_days"] is not None]
+    ar = f"{sum(rts) / len(rts):.0f} days" if rts else "\u2014"
+    hs = _health_score(D)
+
+    audit = []
+    for c in D["commits"]:
+        audit.append({"date": c["date_str"], "type": "Commit",
+                      "author": c["author_id"], "ref": c["sha"], "desc": c["message"]})
+    for i in D["issues"]:
+        audit.append({"date": i["created_str"], "type": "Issue",
+                      "author": i["author"] or "\u2014", "ref": f"#{i['number']}", "desc": i["title"]})
+    for p in D["branch_pulls"]:
+        audit.append({"date": p["created_str"], "type": "PR",
+                      "author": p["author"] or "\u2014", "ref": f"#{p['number']}", "desc": p["title"]})
+    audit.sort(key=lambda x: x["date"], reverse=True)
+    audit = audit[:500]
+
+    # ── Colors ──
+    BG = HexColor("#ffffff")
+    CARD_BG = HexColor("#faf9ff")
+    BORDER = HexColor("#e4e0f0")
+    TEXT = HexColor("#374151")
+    MUTED = HexColor("#6b7280")
+    ACCENT = HexColor("#7c5cfc")
+    DEEP = HexColor("#1a1040")
+    GREEN = HexColor("#10b981")
+    HEADER_BG = HexColor("#7c5cfc")
+
+    # ── Page dimensions ──
+    PW, PH = A4
+    LM, RM, TM, BM = 20 * mm, 20 * mm, 22 * mm, 22 * mm
+    W = PW - LM - RM
+
+    _page_count = [0]
+
+    def _on_page(canvas, doc):
+        _page_count[0] += 1
+        canvas.saveState()
+        canvas.setFillColor(BG)
+        canvas.rect(0, 0, PW, PH, fill=1, stroke=0)
+        canvas.setFillColor(ACCENT)
+        canvas.rect(0, PH - 3 * mm, PW, 3 * mm, fill=1, stroke=0)
+        canvas.setStrokeColor(BORDER)
+        canvas.setLineWidth(0.5)
+        canvas.line(LM, BM - 6 * mm, PW - RM, BM - 6 * mm)
+        canvas.setFillColor(MUTED)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawCentredString(
+            PW / 2, BM - 10 * mm,
+            f"ISO 27001 Compliance Report  \u00b7  {D['owner']}/{D['repo']}  \u00b7  "
+            f"{D['branch']}  \u00b7  Page {_page_count[0]}")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=LM, rightMargin=RM,
+                            topMargin=TM, bottomMargin=BM)
+
+    # ── Styles ──
+    sTitle = ParagraphStyle("CTitle", fontName="Helvetica-Bold", fontSize=22,
+                            textColor=DEEP, leading=28, spaceAfter=6)
+    sSub = ParagraphStyle("CSub", fontName="Helvetica", fontSize=10,
+                          textColor=MUTED, leading=15, spaceAfter=20)
+    sH2 = ParagraphStyle("CH2", fontName="Helvetica-Bold", fontSize=14,
+                         textColor=DEEP, leading=20, spaceBefore=24, spaceAfter=12)
+    sBody = ParagraphStyle("CBody", fontName="Helvetica", fontSize=9,
+                           textColor=TEXT, leading=14, spaceAfter=6)
+    sCell = ParagraphStyle("CCell", fontName="Helvetica", fontSize=8,
+                           textColor=TEXT, leading=12)
+    sCellS = ParagraphStyle("CCellS", fontName="Helvetica", fontSize=7.5,
+                            textColor=MUTED, leading=11)
+    sKpiL = ParagraphStyle("CKpiL", fontName="Helvetica", fontSize=8,
+                           textColor=MUTED, leading=12, alignment=TA_CENTER)
+    sKpiV = ParagraphStyle("CKpiV", fontName="Helvetica-Bold", fontSize=14,
+                           textColor=DEEP, leading=19, alignment=TA_CENTER)
+    sFooter = ParagraphStyle("CFooter", fontName="Helvetica", fontSize=7.5,
+                             textColor=MUTED, alignment=TA_CENTER, leading=11)
+
+    elements = []
+
+    def _kpi(label, value):
+        return [Paragraph(label, sKpiL), Paragraph(str(value), sKpiV)]
+
+    def _std_table(header_labels, data_rows, col_widths, align_from=0):
+        """Build a styled Table with header + data rows."""
+        hdr = [Paragraph(f"<b>{h}</b>", sCell) for h in header_labels]
+        rows = [hdr]
+        for dr in data_rows:
+            rows.append([Paragraph(str(v), sCellS) for v in dr])
+        t = Table(rows, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), HEADER_BG),
+            ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("BACKGROUND", (0, 1), (-1, -1), CARD_BG),
+            ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
+            ("ALIGN", (align_from, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("TOPPADDING", (0, 1), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [CARD_BG, BG]),
+        ]))
+        return t
+
+    # ═══ TITLE PAGE ═══
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("ISO 27001 Compliance Evidence Report", sTitle))
+    elements.append(Paragraph(
+        f"Repository: {D['owner']}/{D['repo']}<br/>"
+        f"Branch: {D['branch']}<br/>"
+        f"Report Date: {dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}<br/>"
+        f"Scope: Branch-level software development audit", sSub))
+    elements.append(Paragraph(
+        '<font color="#7c5cfc"><b>ISO/IEC 27001:2022 \u2014 Annex A</b></font>',
+        ParagraphStyle("CBadge", fontName="Helvetica-Bold", fontSize=10,
+                       textColor=ACCENT, leading=14, spaceAfter=16)))
+    elements.append(Spacer(1, 8))
+
+    # ═══ EXECUTIVE SUMMARY ═══
+    if "Executive Summary" in sections:
+        elements.append(Paragraph("Executive Summary", sH2))
+        elements.append(Paragraph(
+            f"This report provides structured evidence for ISO 27001 compliance covering the "
+            f"software development activities on the <b>{D['branch']}</b> branch of the "
+            f"<b>{D['repo']}</b> repository. The data covers {len(D['commits'])} tracked changes "
+            f"by {len(D['author_stats'])} contributors across {len(D['files'])} tracked files.",
+            sBody))
+        kpi_rows = []
+        kpi_data = [
+            ("Total Changes", str(len(D["commits"]))),
+            ("Contributors", str(len(D["author_stats"]))),
+            ("Files Tracked", str(len(D["files"]))),
+            ("Issues", str(len(D["issues"]))),
+            ("Pull Requests", str(len(D["branch_pulls"]))),
+            ("Health Score", f"{hs}/100"),
+        ]
+        # 2 rows of 3 KPIs
+        for i in range(0, len(kpi_data), 3):
+            chunk = kpi_data[i:i + 3]
+            kpi_rows.append([c[0] for c in chunk])
+            kpi_rows.append([c[1] for c in chunk])
+        kpi_labels = kpi_rows[0::2]
+        kpi_vals = kpi_rows[1::2]
+        flat = []
+        for lr, vr in zip(kpi_labels, kpi_vals):
+            flat.append([Paragraph(l, sKpiL) for l in lr])
+            flat.append([Paragraph(v, sKpiV) for v in vr])
+        kw = W / 3
+        kt = Table(flat, colWidths=[kw] * 3)
+        kt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), CARD_BG),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(kt)
+        elements.append(Spacer(1, 12))
+
+    # ═══ ASSET INVENTORY (A.8) ═══
+    if "Asset Inventory (A.8)" in sections:
+        elements.append(PageBreak())
+        elements.append(Paragraph('Asset Inventory <font color="#7c5cfc">[A.8]</font>', sH2))
+        elements.append(Paragraph(
+            "Information asset register detailing all tracked files, their classification, and size.",
+            sBody))
+        if classifications:
+            n_safe = max(len(D["files"]), 1)
+            rows = [[c, str(n), f"{n / n_safe * 100:.1f}%"] for c, n in classifications]
+            elements.append(_std_table(
+                ["Classification", "Count", "Percentage"], rows,
+                [W * 0.45, W * 0.25, W * 0.25], align_from=1))
+            elements.append(Spacer(1, 10))
+        if languages:
+            lt = max(sum(D["languages"].values()), 1)
+            rows = [[la, str(b), f"{b / lt * 100:.1f}%"] for la, b in languages]
+            elements.append(Paragraph("Language Distribution", ParagraphStyle(
+                "CLangH", fontName="Helvetica-Bold", fontSize=11,
+                textColor=DEEP, leading=16, spaceBefore=14, spaceAfter=8)))
+            elements.append(_std_table(
+                ["Language", "Bytes", "Share"], rows,
+                [W * 0.40, W * 0.30, W * 0.25], align_from=1))
+
+    # ═══ ACCESS CONTROL (A.9) ═══
+    if "Access Control (A.9)" in sections:
+        elements.append(PageBreak())
+        elements.append(Paragraph('Access Control <font color="#7c5cfc">[A.9]</font>', sH2))
+        elements.append(Paragraph(
+            "Personnel with access to the branch and their recorded activity.", sBody))
+        if authors:
+            rows = [[a["id"], a["name"], str(a["commits"]), a["first"], a["last"], str(a["days"])]
+                    for a in authors]
+            elements.append(_std_table(
+                ["Identifier", "Name", "Commits", "First Active", "Last Active", "Days"],
+                rows, [W * 0.18, W * 0.18, W * 0.1, W * 0.18, W * 0.18, W * 0.1],
+                align_from=2))
+
+    # ═══ CHANGE MANAGEMENT (A.12) ═══
+    if "Change Management (A.12)" in sections:
+        elements.append(PageBreak())
+        elements.append(Paragraph('Change Management <font color="#7c5cfc">[A.12 / A.14]</font>', sH2))
+        elements.append(Paragraph(
+            "Complete audit trail of all code changes on the branch.", sBody))
+        # KPI strip
+        kstrip = [
+            [Paragraph("Total Changes", sKpiL), Paragraph("First Change", sKpiL), Paragraph("Last Change", sKpiL)],
+            [Paragraph(str(len(D["commits"])), sKpiV), Paragraph(fd, sKpiV), Paragraph(ld, sKpiV)],
+        ]
+        kst = Table(kstrip, colWidths=[W / 3] * 3)
+        kst.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), CARD_BG),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(kst)
+        elements.append(Spacer(1, 10))
+        commits_slice = D["commits"][:200]
+        if commits_slice:
+            rows = []
+            for c in commits_slice:
+                msg = c["message"]
+                if len(msg) > 80:
+                    msg = msg[:77] + "..."
+                rows.append([c["sha"], c["date_str"], c["author_id"], msg])
+            elements.append(_std_table(
+                ["SHA", "Date", "Author", "Description"], rows,
+                [W * 0.08, W * 0.14, W * 0.14, W * 0.58]))
+            if len(D["commits"]) > 200:
+                elements.append(Paragraph(
+                    f"Showing first 200 of {len(D['commits'])} changes.",
+                    ParagraphStyle("CTrunc", fontName="Helvetica", fontSize=8,
+                                   textColor=MUTED, spaceBefore=4)))
+
+    # ═══ DEVELOPMENT SECURITY (A.14) ═══
+    if "Development Security (A.14)" in sections:
+        elements.append(PageBreak())
+        elements.append(Paragraph('Development Security <font color="#7c5cfc">[A.14]</font>', sH2))
+        elements.append(Paragraph(
+            "Pull request lifecycle and code review process documentation.", sBody))
+        prs = D["branch_pulls"]
+        if prs:
+            rows = []
+            for p in prs:
+                title = p["title"]
+                if len(title) > 50:
+                    title = title[:47] + "..."
+                rows.append([str(p["number"]), title, p["state"], p["author"],
+                             p["head"], p["base"], p["created_str"], p.get("merged_str", "\u2014")])
+            elements.append(_std_table(
+                ["#", "Title", "Status", "Author", "Head", "Base", "Created", "Merged"],
+                rows,
+                [W * 0.05, W * 0.22, W * 0.08, W * 0.1, W * 0.12, W * 0.12, W * 0.12, W * 0.12]))
+        else:
+            elements.append(Paragraph("No branch-related pull requests found.", sBody))
+
+    # ═══ INCIDENT MANAGEMENT (A.16) ═══
+    if "Incident Management (A.16)" in sections:
+        elements.append(PageBreak())
+        elements.append(Paragraph('Incident Management <font color="#7c5cfc">[A.16]</font>', sH2))
+        elements.append(Paragraph(
+            "Issue tracking and resolution metrics.", sBody))
+        # KPI strip
+        istrip = [
+            [Paragraph("Total Issues", sKpiL), Paragraph("Open", sKpiL),
+             Paragraph("Closed", sKpiL), Paragraph("Avg Resolution", sKpiL)],
+            [Paragraph(str(len(D["issues"])), sKpiV), Paragraph(str(len(oi)), sKpiV),
+             Paragraph(str(len(ci)), sKpiV), Paragraph(ar, sKpiV)],
+        ]
+        ist = Table(istrip, colWidths=[W / 4] * 4)
+        ist.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), CARD_BG),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(ist)
+        elements.append(Spacer(1, 10))
+        if D["issues"]:
+            rows = []
+            for i in D["issues"]:
+                title = i["title"]
+                if len(title) > 45:
+                    title = title[:42] + "..."
+                rows.append([str(i["number"]), title, i["state"],
+                             i["author"] or "\u2014", i["assignee"] or "\u2014",
+                             i.get("labels_str", ""), i["created_str"],
+                             i.get("closed_str", "\u2014"),
+                             str(i["resolution_days"]) if i["resolution_days"] is not None else "\u2014"])
+            elements.append(_std_table(
+                ["#", "Title", "State", "Reporter", "Assignee", "Labels", "Created", "Closed", "Days"],
+                rows,
+                [W * 0.04, W * 0.19, W * 0.07, W * 0.1, W * 0.1, W * 0.13, W * 0.1, W * 0.1, W * 0.06]))
+
+    # ═══ FULL AUDIT TRAIL ═══
+    if "Full Audit Trail" in sections:
+        elements.append(PageBreak())
+        elements.append(Paragraph("Full Audit Trail", sH2))
+        elements.append(Paragraph(
+            "Chronological record of all tracked events.", sBody))
+        if audit:
+            rows = []
+            for e in audit:
+                desc = e["desc"]
+                if len(desc) > 60:
+                    desc = desc[:57] + "..."
+                rows.append([e["date"], e["type"], e["author"], e["ref"], desc])
+            elements.append(_std_table(
+                ["Date", "Type", "Author", "Ref", "Description"],
+                rows, [W * 0.13, W * 0.08, W * 0.13, W * 0.08, W * 0.52]))
+
+    # ── End ──
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("\u2014 End of Report \u2014", ParagraphStyle(
+        "CEndMark", fontName="Helvetica-Bold", fontSize=10,
+        textColor=MUTED, alignment=TA_CENTER, leading=14)))
+    elements.append(Spacer(1, 8))
+    elements.append(Paragraph(
+        f"Generated by GAM Software PM \u00b7 ISO 27001 Compliance Platform \u00b7 "
+        f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}", sFooter))
+
+    doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
 
 def _fig_to_png_bytes(fig, width=800, height=400):
     """Convert a Plotly figure to PNG bytes for PDF embedding."""
