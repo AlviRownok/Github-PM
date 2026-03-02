@@ -1886,16 +1886,18 @@ def page_project_timeline(D):
             color_discrete_map=color_map,
         )
         fig.update_yaxes(autorange="reversed")
+        _n = len(timeline_items)
         fig.update_layout(
-            height=max(200, 80 + len(timeline_items) * 60),
+            height=max(360, 180 + _n * 80),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font=dict(color="#1f2937"),
-            xaxis=dict(tickfont=dict(color="#374151"), title_text=""),
-            yaxis=dict(tickfont=dict(color="#374151", size=11), title_text=""),
-            margin=dict(l=10, r=10, t=30, b=10),
-            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5,
-                        font=dict(color="#1f2937")),
+            xaxis=dict(tickfont=dict(color="#374151", size=12), title_text=""),
+            yaxis=dict(tickfont=dict(color="#374151", size=12), title_text=""),
+            margin=dict(l=10, r=10, t=40, b=60),
+            legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center", x=0.5,
+                        font=dict(color="#1f2937", size=13)),
             showlegend=True,
+            bargap=0.35,
         )
 
         # Deadline markers — use add_shape + add_annotation to avoid Plotly bug
