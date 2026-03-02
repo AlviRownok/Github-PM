@@ -82,21 +82,21 @@ def _resolve_token() -> str | None:
 GITHUB_TOKEN = _resolve_token()
 
 NAV_SECTIONS = [
-    "📊 Command Center",
-    "📦 Asset Inventory",
-    "📜 Change Ledger",
-    "🔐 Access Registry",
-    "🚨 Incident Log",
-    "🔀 Pull Requests",
-    "🧠 Author Intelligence",
-    "📅 Project Timeline",
-    "🛡️ Compliance Hub",
+    "📊 Centro di Comando",
+    "📦 Inventario degli Asset",
+    "📜 Registro delle Modifiche",
+    "🔐 Registro degli Accessi",
+    "🚨 Registro degli Incidenti",
+    "🔀 Pull Request",
+    "🧠 Analisi dei Contributori",
+    "📅 Cronologia del Progetto",
+    "🛡️ Centro Conformità",
 ]
 
 ACTIVITY_TAGS = [
-    "Architecture", "Backend", "Frontend", "Database",
-    "DevOps", "Security", "Testing", "Documentation",
-    "Bug Fix", "Feature", "Refactor", "Config",
+    "Architettura", "Backend", "Frontend", "Database",
+    "DevOps", "Sicurezza", "Testing", "Documentazione",
+    "Correzione Bug", "Funzionalità", "Refactoring", "Configurazione",
 ]
 
 FILE_CLASS_MAP = {
@@ -446,7 +446,16 @@ CUSTOM_CSS = """
     }
 
     /* ─── Expanders & Tabs ─── */
-    .streamlit-expanderHeader { color: #1a1040 !important; font-weight: 600; }
+    .streamlit-expanderHeader,
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] details > summary > span { color: #1a1040 !important; font-weight: 600; font-size: 1rem; }
+    [data-testid="stExpander"] details > summary > span p { color: #1a1040 !important; }
+    [data-testid="stExpander"] svg { fill: #7c5cfc !important; }
+    [data-testid="stExpander"] { border: 1px solid #e4e0f0 !important; border-radius: 10px !important; background: #faf9ff !important; }
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] { color: #374151 !important; }
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] table th { color: #7c5cfc !important; background: #f5f3ff !important; font-weight: 600; }
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] table td { color: #374151 !important; }
+    [data-testid="stExpander"] [data-testid="stMarkdownContainer"] strong { color: #1a1040 !important; }
     .stTabs [data-baseweb="tab"] { color: #6b7280; font-weight: 500; }
     .stTabs [aria-selected="true"] { color: #7c5cfc !important; border-bottom-color: #7c5cfc !important; }
 
@@ -748,8 +757,8 @@ def collect_branch_data(owner, repo, branch):
     repo_info = _fetch_repo(owner, repo)
     if not repo_info or not repo_info.get("full_name"):
         raise RuntimeError(
-            f"Repository '{owner}/{repo}' not found or not accessible. "
-            "Check the URL and ensure your token has access to this repository."
+            f"Repository '{owner}/{repo}' non trovato o non accessibile. "
+            "Controlla l'URL e assicurati che il token abbia accesso a questo repository."
         )
     default_branch = repo_info.get("default_branch", "main")
 
@@ -760,8 +769,8 @@ def collect_branch_data(owner, repo, branch):
     # Validate the requested branch exists
     if branch_names and branch not in branch_names:
         raise RuntimeError(
-            f"Branch '{branch}' not found in {owner}/{repo}. "
-            f"Available branches: {', '.join(branch_names[:15])}"
+            f"Branch '{branch}' non trovato in {owner}/{repo}. "
+            f"Branch disponibili: {', '.join(branch_names[:15])}"
         )
 
     # Commits — use compare API for accurate branch-only commits
@@ -923,7 +932,7 @@ def collect_branch_data(owner, repo, branch):
             "title": m.get("title"), "state": m.get("state"),
             "open_issues": m.get("open_issues", 0),
             "closed_issues": m.get("closed_issues", 0),
-            "due": due, "due_str": _fmt(due, "%Y-%m-%d") if due else "No due date",
+            "due": due, "due_str": _fmt(due, "%Y-%m-%d") if due else "Nessuna scadenza",
             "description": m.get("description") or "",
         })
 
@@ -1052,7 +1061,7 @@ def _section_hdr(title, subtitle="", iso=None):
 # ═══════════════════════════════════════════════════════════════
 
 def page_command_center(D):
-    _section_hdr("Command Center", "Real-time branch health and activity overview")
+    _section_hdr("Centro di Comando", "Panoramica in tempo reale della salute e dell'attivit\u00e0 del branch")
 
     ri = D["repo_info"]
     commits = D["commits"]
@@ -1061,14 +1070,14 @@ def page_command_center(D):
     hs = _health_score(D)
 
     hcls = "hr-g" if hs >= 70 else ("hr-f" if hs >= 40 else "hr-p")
-    hlbl = "Healthy" if hs >= 70 else ("Fair" if hs >= 40 else "Needs Attention")
+    hlbl = "In salute" if hs >= 70 else ("Discreto" if hs >= 40 else "Richiede Attenzione")
 
     c1, c2 = st.columns([1, 3])
     with c1:
         st.markdown(f'''
         <div style="text-align:center;padding:20px;">
             <div class="hr {hcls}">{hs}</div>
-            <div style="margin-top:8px;color:#6b7280;font-size:.83rem;">Branch Health</div>
+            <div style="margin-top:8px;color:#6b7280;font-size:.83rem;">Salute del Branch</div>
             <div style="font-weight:600;color:#1a1040;">{hlbl}</div>
         </div>''', unsafe_allow_html=True)
 
@@ -1076,62 +1085,62 @@ def page_command_center(D):
         oi = sum(1 for i in issues if i["state"] == "open")
         op = sum(1 for p in bpulls if p["state"] == "open")
         _metric_row([
-            ("Commits on Branch", str(len(commits))),
-            ("Contributors", str(len(D["author_stats"]))),
-            ("Open Issues", str(oi), f"{len(issues)} total"),
-            ("Branch PRs", str(len(bpulls)), f"{op} open"),
-            ("Files Tracked", _fnum(len(D["files"]))),
+            ("Commit sul Branch", str(len(commits))),
+            ("Contributori", str(len(D["author_stats"]))),
+            ("Issue Aperte", str(oi), f"{len(issues)} totali"),
+            ("PR del Branch", str(len(bpulls)), f"{op} aperte"),
+            ("File Tracciati", _fnum(len(D["files"]))),
         ])
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Repository", ri.get("full_name", ""))
-    c2.metric("Active Branch", D["branch"])
-    c3.metric("Default Branch", D["default_branch"])
-    c4.metric("Primary Language", ri.get("language") or "\u2014")
+    c2.metric("Branch Attivo", D["branch"])
+    c3.metric("Branch Predefinito", D["default_branch"])
+    c4.metric("Linguaggio Principale", ri.get("language") or "\u2014")
 
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Stars", ri.get("stargazers_count", 0))
-    c6.metric("Forks", ri.get("forks_count", 0))
-    c7.metric("Created", _fmt(D["created_at"], "%Y-%m-%d"))
-    c8.metric("Last Push", _fmt(D["pushed_at"], "%Y-%m-%d"))
+    c5.metric("Stelle", ri.get("stargazers_count", 0))
+    c6.metric("Fork", ri.get("forks_count", 0))
+    c7.metric("Creato il", _fmt(D["created_at"], "%Y-%m-%d"))
+    c8.metric("Ultimo Push", _fmt(D["pushed_at"], "%Y-%m-%d"))
 
     st.markdown("")
-    st.markdown("#### Weekly Commit Activity (Repository Level)")
+    st.markdown("#### Attivit\u00e0 di Commit Settimanale (Livello Repository)")
     if D["weekly_activity"]:
         df = pd.DataFrame(D["weekly_activity"])
         fig = px.area(df, x="week", y="total",
-                      labels={"week": "Week", "total": "Commits"},
+                      labels={"week": "Settimana", "total": "Commit"},
                       color_discrete_sequence=["#7c5cfc"])
         fig.update_layout(**_plotly_layout(250))
         st.plotly_chart(fig, width='stretch')
     else:
-        st.caption("Weekly activity data not yet available from GitHub.")
+        st.caption("Dati di attivit\u00e0 settimanale non ancora disponibili da GitHub.")
 
-    with st.expander("How is Branch Health calculated?"):
+    with st.expander("ℹ️ Come viene calcolata la Salute del Branch?", expanded=False):
         st.markdown("""
-| Factor | Condition | Points |
+| Fattore | Condizione | Punti |
 |---|---|---|
-| **Commit Recency** | Last commit ≤ 7 days | +20 |
-| | Last commit ≤ 30 days | +12 |
-| | Last commit ≤ 90 days | +5 |
-| | Last commit > 90 days | −10 |
-| | No commits | −15 |
-| **Issue Resolution** | Closed / Total issues × 15 | 0 – 15 |
-| **PR Merge Rate** | Merged / Total PRs × 15 | 0 – 15 |
-| **Team Size** | ≥ 3 contributors | +10 |
-| | 2 contributors | +5 |
+| **Recenza dei Commit** | Ultimo commit ≤ 7 giorni | **+20** |
+| | Ultimo commit ≤ 30 giorni | **+12** |
+| | Ultimo commit ≤ 90 giorni | **+5** |
+| | Ultimo commit > 90 giorni | **−10** |
+| | Nessun commit | **−15** |
+| **Risoluzione Issue** | Chiuse / Totale issue × 15 | **0 – 15** |
+| **Tasso di Merge PR** | Merge / Totale PR × 15 | **0 – 15** |
+| **Dimensione del Team** | ≥ 3 contributori | **+10** |
+| | 2 contributori | **+5** |
 
-Base score is **50**. Final score is clamped to 0 – 100.  
-≥ 70 = Healthy · 40 – 69 = Fair · < 40 = Needs Attention
+Punteggio base: **50**. Punteggio finale compreso tra **0 – 100**.  
+**≥ 70** = In salute · **40 – 69** = Discreto · **< 40** = Richiede Attenzione
 """)
 
-    st.markdown("#### Recent Commits on Branch")
+    st.markdown("#### Commit Recenti sul Branch")
     if commits[:25]:
         df = pd.DataFrame(commits[:25])[["sha", "message", "author_id", "date_str"]]
-        df.columns = ["SHA", "Message", "Author", "Date"]
+        df.columns = ["SHA", "Messaggio", "Autore", "Data"]
         st.dataframe(df, width='stretch', hide_index=True)
     else:
-        st.caption("No branch-specific commits found.")
+        st.caption("Nessun commit specifico trovato per questo branch.")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1139,14 +1148,14 @@ Base score is **50**. Final score is clamped to 0 – 100.
 # ═══════════════════════════════════════════════════════════════
 
 def page_asset_inventory(D):
-    _section_hdr("Asset Inventory",
-                 "Complete information asset register for the branch", iso="A.8")
+    _section_hdr("Inventario degli Asset",
+                 "Registro completo degli asset informativi per il branch", iso="A.8")
 
     files = D["files"]
     languages = D["languages"]
 
     if not files:
-        st.info("No file tree data available for this branch.")
+        st.info("Nessun dato dell'albero dei file disponibile per questo branch.")
         return
 
     total_size = sum(f["size"] for f in files)
@@ -1163,55 +1172,55 @@ def page_asset_inventory(D):
 
     sz = f"{total_size / 1024:.0f} KB" if total_size < 1_048_576 else f"{total_size / 1_048_576:.1f} MB"
     _metric_row([
-        ("Total Files", str(len(files))),
-        ("Directories", str(len(dirs))),
-        ("Total Size", sz),
-        ("File Types", str(len(exts))),
+        ("File Totali", str(len(files))),
+        ("Directory", str(len(dirs))),
+        ("Dimensione Totale", sz),
+        ("Tipi di File", str(len(exts))),
     ])
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("#### Asset Classification")
+        st.markdown("#### Classificazione degli Asset")
         df_c = pd.DataFrame([
-            {"Classification": k, "Count": v, "Pct": f"{v / len(files) * 100:.1f}%"}
+            {"Classificazione": k, "Conteggio": v, "Perc": f"{v / len(files) * 100:.1f}%"}
             for k, v in sorted(clsf.items(), key=lambda x: -x[1])
         ])
         st.dataframe(df_c, width='stretch', hide_index=True)
         if len(df_c) > 1:
-            fig = px.pie(df_c, values="Count", names="Classification",
+            fig = px.pie(df_c, values="Conteggio", names="Classificazione",
                          color_discrete_sequence=px.colors.qualitative.Set3)
             fig.update_layout(**_plotly_layout(280))
             st.plotly_chart(fig, width='stretch')
 
     with col2:
-        st.markdown("#### Language Distribution")
+        st.markdown("#### Distribuzione dei Linguaggi")
         if languages:
             tb = sum(languages.values()) or 1
             df_l = pd.DataFrame([
-                {"Language": k, "Bytes": v, "Share": f"{v / tb * 100:.1f}%"}
+                {"Linguaggio": k, "Byte": v, "Quota": f"{v / tb * 100:.1f}%"}
                 for k, v in sorted(languages.items(), key=lambda x: -x[1])
             ])
             st.dataframe(df_l, width='stretch', hide_index=True)
-            fig = px.pie(df_l, values="Bytes", names="Language",
+            fig = px.pie(df_l, values="Byte", names="Linguaggio",
                          color_discrete_sequence=px.colors.qualitative.Pastel)
             fig.update_layout(**_plotly_layout(280))
             st.plotly_chart(fig, width='stretch')
         else:
-            st.caption("No language data available.")
+            st.caption("Nessun dato sui linguaggi disponibile.")
 
-    st.markdown("#### File Extension Breakdown")
+    st.markdown("#### Distribuzione delle Estensioni")
     top_e = exts.most_common(15)
     if top_e:
-        df_e = pd.DataFrame(top_e, columns=["Extension", "Count"])
-        fig = px.bar(df_e, x="Extension", y="Count", color_discrete_sequence=["#2070e0"])
+        df_e = pd.DataFrame(top_e, columns=["Estensione", "Conteggio"])
+        fig = px.bar(df_e, x="Estensione", y="Conteggio", color_discrete_sequence=["#2070e0"])
         fig.update_layout(**_plotly_layout(240))
         st.plotly_chart(fig, width='stretch')
 
-    st.markdown("#### Complete File Inventory")
+    st.markdown("#### Inventario Completo dei File")
     df_f = pd.DataFrame(files)
-    df_f["Size"] = df_f["size"].apply(lambda s: f"{s / 1024:.1f} KB" if s >= 1024 else f"{s} B")
-    df_f = df_f[["path", "classification", "Size"]].rename(columns={
-        "path": "File Path", "classification": "Classification"})
+    df_f["Dimensione"] = df_f["size"].apply(lambda s: f"{s / 1024:.1f} KB" if s >= 1024 else f"{s} B")
+    df_f = df_f[["path", "classification", "Dimensione"]].rename(columns={
+        "path": "Percorso File", "classification": "Classificazione"})
     st.dataframe(df_f, width='stretch', hide_index=True, height=420)
 
 
@@ -1220,13 +1229,13 @@ def page_asset_inventory(D):
 # ═══════════════════════════════════════════════════════════════
 
 def page_change_ledger(D):
-    _section_hdr("Change Ledger",
-                 "Complete audit trail of all code changes on the branch",
+    _section_hdr("Registro delle Modifiche",
+                 "Traccia di audit completa di tutte le modifiche al codice sul branch",
                  iso="A.12 / A.14")
 
     commits = D["commits"]
     if not commits:
-        st.info("No commits found on this branch.")
+        st.info("Nessun commit trovato su questo branch.")
         return
 
     dated = [c for c in commits if c["date"]]
@@ -1236,31 +1245,31 @@ def page_change_ledger(D):
     busiest = day_counts.most_common(1)[0] if day_counts else ("\u2014", 0)
 
     _metric_row([
-        ("Total Changes", str(len(commits))),
-        ("Contributors", str(len(set(c["author_id"] for c in commits)))),
-        ("First Change", first["date_str"] if first else "\u2014"),
-        ("Latest Change", last["date_str"] if last else "\u2014"),
-        ("Busiest Day", f"{busiest[0]} ({busiest[1]})" if busiest[0] != "\u2014" else "\u2014"),
+        ("Modifiche Totali", str(len(commits))),
+        ("Contributori", str(len(set(c["author_id"] for c in commits)))),
+        ("Prima Modifica", first["date_str"] if first else "\u2014"),
+        ("Ultima Modifica", last["date_str"] if last else "\u2014"),
+        ("Giorno pi\u00f9 Attivo", f"{busiest[0]} ({busiest[1]})" if busiest[0] != "\u2014" else "\u2014"),
     ])
 
-    st.markdown("#### Change Frequency")
+    st.markdown("#### Frequenza delle Modifiche")
     if day_counts:
-        df = pd.DataFrame(sorted(day_counts.items()), columns=["Date", "Changes"])
-        fig = px.bar(df, x="Date", y="Changes", color_discrete_sequence=["#7c5cfc"])
+        df = pd.DataFrame(sorted(day_counts.items()), columns=["Data", "Modifiche"])
+        fig = px.bar(df, x="Data", y="Modifiche", color_discrete_sequence=["#7c5cfc"])
         fig.update_layout(**_plotly_layout(250))
         st.plotly_chart(fig, width='stretch')
 
-    st.markdown("#### Changes by Author")
+    st.markdown("#### Modifiche per Autore")
     ac = Counter(c["author_id"] for c in commits)
     if ac:
-        df = pd.DataFrame(ac.most_common(), columns=["Author", "Commits"])
-        fig = px.bar(df, x="Author", y="Commits", color_discrete_sequence=["#2070e0"])
+        df = pd.DataFrame(ac.most_common(), columns=["Autore", "Commit"])
+        fig = px.bar(df, x="Autore", y="Commit", color_discrete_sequence=["#2070e0"])
         fig.update_layout(**_plotly_layout(250))
         st.plotly_chart(fig, width='stretch')
 
-    st.markdown("#### Complete Change Log")
+    st.markdown("#### Registro Completo delle Modifiche")
     df = pd.DataFrame(commits)[["sha", "message", "author_id", "date_str"]]
-    df.columns = ["SHA", "Description", "Author", "Timestamp"]
+    df.columns = ["SHA", "Descrizione", "Autore", "Data"]
     st.dataframe(df, width='stretch', hide_index=True, height=500)
 
 
@@ -1269,13 +1278,13 @@ def page_change_ledger(D):
 # ═══════════════════════════════════════════════════════════════
 
 def page_access_registry(D):
-    _section_hdr("Access Registry",
-                 "Personnel with repository access and their activity on the branch",
+    _section_hdr("Registro degli Accessi",
+                 "Personale con accesso al repository e la loro attivit\u00e0 sul branch",
                  iso="A.9")
 
     astats = D["author_stats"]
 
-    st.markdown("#### Branch Contributors")
+    st.markdown("#### Contributori del Branch")
     if astats:
         rows = []
         for aid, s in sorted(astats.items(), key=lambda x: -x[1]["commits"]):
@@ -1283,50 +1292,52 @@ def page_access_registry(D):
             days = (l.date() - f.date()).days + 1 if f and l else 0
             inactive = l and (dt.datetime.now(dt.UTC) - l).days > 30
             rows.append({
-                "Identifier": aid, "Name": s["name"] or "\u2014",
-                "Commits": s["commits"],
-                "First Active": _fmt(f, "%Y-%m-%d"),
-                "Last Active": _fmt(l, "%Y-%m-%d"),
-                "Days Active": days,
-                "Status": "Inactive" if inactive else "Active",
+                "Identificativo": aid, "Nome": s["name"] or "\u2014",
+                "Commit": s["commits"],
+                "Prima Attivit\u00e0": _fmt(f, "%Y-%m-%d"),
+                "Ultima Attivit\u00e0": _fmt(l, "%Y-%m-%d"),
+                "Giorni Attivo": days,
+                "Stato": "Inattivo" if inactive else "Attivo",
             })
 
         _metric_row([
-            ("Total Contributors", str(len(rows))),
-            ("Active (30d)", str(sum(1 for r in rows if r["Status"] == "Active"))),
-            ("Inactive", str(sum(1 for r in rows if r["Status"] == "Inactive"))),
+            ("Contributori Totali", str(len(rows))),
+            ("Attivi (30g)", str(sum(1 for r in rows if r["Stato"] == "Attivo"))),
+            ("Inattivi", str(sum(1 for r in rows if r["Stato"] == "Inattivo"))),
         ])
         st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
     else:
-        st.caption("No contributor data for this branch.")
+        st.caption("Nessun dato contributore per questo branch.")
 
     st.markdown("")
-    st.markdown("#### Repository-Level Access (All Branches)")
+    st.markdown("#### Accesso a Livello di Repository (Tutti i Branch)")
     if D["contributors"]:
         df = pd.DataFrame(D["contributors"])[["login", "contributions", "type"]]
-        df.columns = ["Login", "Total Contributions", "Type"]
+        df.columns = ["Login", "Contribuzioni Totali", "Tipo"]
         st.dataframe(df, width='stretch', hide_index=True)
     else:
-        st.caption("No contributor data available.")
+        st.caption("Nessun dato contributore disponibile.")
 
-    st.markdown("#### Activity Pattern by Day of Week")
+    st.markdown("#### Distribuzione Attivit\u00e0 per Giorno della Settimana")
     commits = D["commits"]
     if commits:
         ad = defaultdict(lambda: Counter())
+        _day_map = {"Monday": "Lunedì", "Tuesday": "Martedì", "Wednesday": "Mercoledì",
+                    "Thursday": "Giovedì", "Friday": "Venerdì", "Saturday": "Sabato", "Sunday": "Domenica"}
         for c in commits:
             if c["date"]:
-                ad[c["author_id"]][c["date"].strftime("%A")] += 1
-        days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                ad[c["author_id"]][_day_map.get(c["date"].strftime("%A"), c["date"].strftime("%A"))] += 1
+        days_order = ["Luned\u00ec", "Marted\u00ec", "Mercoled\u00ec", "Gioved\u00ec", "Venerd\u00ec", "Sabato", "Domenica"]
         rows = []
         for author, dc in ad.items():
             for day in days_order:
                 cnt = dc.get(day, 0)
                 if cnt > 0:
-                    rows.append({"Author": author, "Day": day, "Commits": cnt})
+                    rows.append({"Autore": author, "Giorno": day, "Commit": cnt})
         if rows:
             df = pd.DataFrame(rows)
-            fig = px.bar(df, x="Day", y="Commits", color="Author", barmode="group",
-                         category_orders={"Day": days_order})
+            fig = px.bar(df, x="Giorno", y="Commit", color="Autore", barmode="group",
+                         category_orders={"Giorno": days_order})
             fig.update_layout(**_plotly_layout(300))
             st.plotly_chart(fig, width='stretch')
 
@@ -1336,12 +1347,12 @@ def page_access_registry(D):
 # ═══════════════════════════════════════════════════════════════
 
 def page_incident_log(D):
-    _section_hdr("Incident Log",
-                 "Issue tracking and resolution metrics", iso="A.16")
+    _section_hdr("Registro degli Incidenti",
+                 "Monitoraggio delle issue e metriche di risoluzione", iso="A.16")
 
     issues = D["issues"]
     if not issues:
-        st.info("No issues found in this repository.")
+        st.info("Nessuna issue trovata in questo repository.")
         return
 
     oi = [i for i in issues if i["state"] == "open"]
@@ -1350,52 +1361,52 @@ def page_incident_log(D):
     avg = sum(rts) / len(rts) if rts else None
 
     _metric_row([
-        ("Total Issues", str(len(issues))),
-        ("Open", str(len(oi))),
-        ("Closed", str(len(ci))),
-        ("Resolution Rate", f"{len(ci) / len(issues) * 100:.0f}%" if issues else "\u2014"),
-        ("Avg Resolution", f"{avg:.0f} days" if avg else "\u2014"),
+        ("Issue Totali", str(len(issues))),
+        ("Aperte", str(len(oi))),
+        ("Chiuse", str(len(ci))),
+        ("Tasso di Risoluzione", f"{len(ci) / len(issues) * 100:.0f}%" if issues else "\u2014"),
+        ("Risoluzione Media", f"{avg:.0f} giorni" if avg else "\u2014"),
     ])
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("#### Open Issues")
+        st.markdown("#### Issue Aperte")
         if oi:
             df = pd.DataFrame(oi)[["number", "title", "author", "assignee", "labels_str", "created_str"]]
-            df.columns = ["#", "Title", "Reporter", "Assignee", "Labels", "Created"]
+            df.columns = ["#", "Titolo", "Segnalante", "Assegnatario", "Etichette", "Creata"]
             st.dataframe(df, width='stretch', hide_index=True)
         else:
-            st.success("No open issues!")
+            st.success("Nessuna issue aperta!")
 
     with c2:
-        st.markdown("#### Recently Closed")
+        st.markdown("#### Chiuse di Recente")
         if ci:
             df = pd.DataFrame(ci[:20])[["number", "title", "assignee", "resolution_days", "closed_str"]]
-            df.columns = ["#", "Title", "Assignee", "Days to Close", "Closed"]
+            df.columns = ["#", "Titolo", "Assegnatario", "Giorni per Chiusura", "Chiusa"]
             st.dataframe(df, width='stretch', hide_index=True)
         else:
-            st.caption("No closed issues.")
+            st.caption("Nessuna issue chiusa.")
 
     st.markdown("")
-    st.markdown("#### Issue Categories")
+    st.markdown("#### Categorie delle Issue")
     all_labels = []
     for i in issues:
         all_labels.extend(i["labels"])
     if all_labels:
         lc = Counter(all_labels)
-        df = pd.DataFrame(lc.most_common(15), columns=["Label", "Count"])
-        fig = px.bar(df, x="Label", y="Count", color_discrete_sequence=["#eab308"])
+        df = pd.DataFrame(lc.most_common(15), columns=["Etichetta", "Conteggio"])
+        fig = px.bar(df, x="Etichetta", y="Conteggio", color_discrete_sequence=["#eab308"])
         fig.update_layout(**_plotly_layout(240))
         st.plotly_chart(fig, width='stretch')
 
     if rts:
-        st.markdown("#### Resolution Time Distribution")
-        fig = px.histogram(pd.DataFrame({"Days": rts}), x="Days", nbins=20,
+        st.markdown("#### Distribuzione dei Tempi di Risoluzione")
+        fig = px.histogram(pd.DataFrame({"Giorni": rts}), x="Giorni", nbins=20,
                            color_discrete_sequence=["#06b6d4"])
         fig.update_layout(**_plotly_layout(240,
-                          xaxis=dict(gridcolor="#f0eeff", title="Days to Resolution",
+                          xaxis=dict(gridcolor="#f0eeff", title="Giorni per la Risoluzione",
                                      title_font=dict(color="#1a1040"), tickfont=dict(color="#374151")),
-                          yaxis=dict(gridcolor="#f0eeff", title="Count",
+                          yaxis=dict(gridcolor="#f0eeff", title="Conteggio",
                                      title_font=dict(color="#1a1040"), tickfont=dict(color="#374151"))))
         st.plotly_chart(fig, width='stretch')
 
@@ -1405,13 +1416,13 @@ def page_incident_log(D):
 # ═══════════════════════════════════════════════════════════════
 
 def page_pull_requests(D):
-    _section_hdr("Pull Requests",
-                 "Code review and merge lifecycle for the branch", iso="A.14")
+    _section_hdr("Pull Request",
+                 "Ciclo di revisione del codice e merge per il branch", iso="A.14")
 
     bp = D["branch_pulls"]
     ap = D["pulls"]
 
-    st.markdown(f"#### Branch-Related PRs (`{D['branch']}`)")
+    st.markdown(f"#### PR relative al Branch (`{D['branch']}`)")
     if bp:
         op = [p for p in bp if p["state"] == "open"]
         mg = [p for p in bp if p["state"] == "merged"]
@@ -1420,26 +1431,26 @@ def page_pull_requests(D):
         am = sum(mts) / len(mts) if mts else None
 
         _metric_row([
-            ("Branch PRs", str(len(bp))),
-            ("Open", str(len(op))),
-            ("Merged", str(len(mg))),
-            ("Closed (unmerged)", str(len(cl))),
-            ("Avg Merge Time", f"{am:.0f} days" if am else "\u2014"),
+            ("PR del Branch", str(len(bp))),
+            ("Aperte", str(len(op))),
+            ("Merge Effettuati", str(len(mg))),
+            ("Chiuse (senza merge)", str(len(cl))),
+            ("Tempo Medio di Merge", f"{am:.0f} giorni" if am else "\u2014"),
         ])
         df = pd.DataFrame(bp)[["number", "title", "state", "author", "head", "base", "created_str", "merged_str"]]
-        df.columns = ["#", "Title", "Status", "Author", "Head", "Base", "Created", "Merged"]
+        df.columns = ["#", "Titolo", "Stato", "Autore", "Head", "Base", "Creata", "Merge"]
         st.dataframe(df, width='stretch', hide_index=True)
     else:
-        st.info("No pull requests associated with this branch.")
+        st.info("Nessuna pull request associata a questo branch.")
 
     st.markdown("")
-    st.markdown("#### All Repository PRs")
+    st.markdown("#### Tutte le PR del Repository")
     if ap:
         df = pd.DataFrame(ap)[["number", "title", "state", "author", "head", "base", "created_str"]]
-        df.columns = ["#", "Title", "Status", "Author", "Head", "Base", "Created"]
+        df.columns = ["#", "Titolo", "Stato", "Autore", "Head", "Base", "Creata"]
         st.dataframe(df, width='stretch', hide_index=True, height=400)
     else:
-        st.caption("No pull requests found.")
+        st.caption("Nessuna pull request trovata.")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1471,17 +1482,17 @@ def _build_author_file_analysis(enriched):
 
 
 def page_author_intelligence(D):
-    _section_hdr("Author Intelligence",
-                 f"Deep analysis of individual contributor activity on <b>{D['branch']}</b> branch")
+    _section_hdr("Analisi dei Contributori",
+                 f"Analisi approfondita dell'attivit\u00e0 dei singoli contributori sul branch <b>{D['branch']}</b>")
 
     astats = D["author_stats"]
     if not astats:
-        st.info("No author data available.")
+        st.info("Nessun dato autore disponibile.")
         return
 
-    selected = st.selectbox("Select Contributor", list(astats.keys()))
+    selected = st.selectbox("Seleziona Contributore", list(astats.keys()))
 
-    if st.button("Analyze Contributor", type="primary"):
+    if st.button("Analizza Contributore", type="primary"):
         owner, repo = D["owner"], D["repo"]
         # Get ALL commits for this author — no limit
         ac = sorted(
@@ -1489,12 +1500,12 @@ def page_author_intelligence(D):
             key=lambda x: x["date"],
         )
         if not ac:
-            st.warning("No commits found for this author.")
+            st.warning("Nessun commit trovato per questo autore.")
             return
 
         ta, td, tf = 0, 0, 0
         enriched = []
-        with st.spinner(f"Fetching details for {len(ac)} commits (this may take a moment)..."):
+        with st.spinner(f"Recupero dettagli per {len(ac)} commit (potrebbe richiedere un momento)..."):
             for c in ac:
                 det = _fetch_commit_detail(owner, repo, c["sha_full"])
                 s = det.get("stats", {})
@@ -1528,39 +1539,39 @@ def page_author_intelligence(D):
 
         # --- KPI Cards ---
         _metric_row([
-            ("Total Commits", str(len(ac))),
-            ("Lines Added", _fnum(ta)),
-            ("Lines Removed", _fnum(td)),
-            ("Net Lines", _fnum(ta - td)),
-            ("Unique Files", str(unique_files)),
-            ("Days Active", str(days)),
-            ("Avg Commits/Day", f"{avg_per_day:.1f}"),
-            ("Files/Commit", f"{tf / max(len(ac), 1):.1f}"),
+            ("Commit Totali", str(len(ac))),
+            ("Righe Aggiunte", _fnum(ta)),
+            ("Righe Rimosse", _fnum(td)),
+            ("Righe Nette", _fnum(ta - td)),
+            ("File Unici", str(unique_files)),
+            ("Giorni Attivo", str(days)),
+            ("Media Commit/Giorno", f"{avg_per_day:.1f}"),
+            ("File/Commit", f"{tf / max(len(ac), 1):.1f}"),
         ])
 
         # --- Row 1: Daily Activity & Code Changes ---
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("#### Daily Commit Activity")
+            st.markdown("#### Attivit\u00e0 di Commit Giornaliera")
             dc = Counter(c["date_day"] for c in ac)
             if dc:
-                df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
-                fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
+                df = pd.DataFrame(sorted(dc.items()), columns=["Data", "Commit"])
+                fig = px.bar(df, x="Data", y="Commit", color_discrete_sequence=["#7c5cfc"])
                 fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, width='stretch', key="ai_daily")
 
         with c2:
-            st.markdown("#### Code Changes per Commit")
+            st.markdown("#### Modifiche al Codice per Commit")
             if enriched:
                 df = pd.DataFrame(enriched)[["date_str", "additions", "deletions"]]
-                df.columns = ["Date", "Additions", "Deletions"]
-                df = df.groupby("Date", as_index=False).sum().sort_values("Date")
+                df.columns = ["Data", "Aggiunte", "Rimozioni"]
+                df = df.groupby("Data", as_index=False).sum().sort_values("Data")
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df["Date"], y=df["Additions"], name="Additions",
+                fig.add_trace(go.Scatter(x=df["Data"], y=df["Aggiunte"], name="Aggiunte",
                                          fill="tozeroy", mode="lines",
                                          line=dict(color="#10b981", width=1.5),
                                          fillcolor="rgba(16,185,129,0.35)"))
-                fig.add_trace(go.Scatter(x=df["Date"], y=df["Deletions"], name="Deletions",
+                fig.add_trace(go.Scatter(x=df["Data"], y=df["Rimozioni"], name="Rimozioni",
                                          fill="tozeroy", mode="lines",
                                          line=dict(color="#ef4444", width=1.5),
                                          fillcolor="rgba(239,68,68,0.35)"))
@@ -1570,10 +1581,10 @@ def page_author_intelligence(D):
         # --- Row 2: File Classification Pie & File Extension Pie ---
         c3, c4 = st.columns(2)
         with c3:
-            st.markdown("#### Files by Classification")
+            st.markdown("#### File per Classificazione")
             if cls_counter:
-                df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
-                fig = px.pie(df, values="Count", names="Classification",
+                df = pd.DataFrame(cls_counter.items(), columns=["Classificazione", "Conteggio"])
+                fig = px.pie(df, values="Conteggio", names="Classificazione",
                              color_discrete_sequence=px.colors.qualitative.Set2,
                              hole=0.4)
                 fig.update_layout(**_plotly_layout(260, margin=dict(l=5, r=5, t=10, b=5),
@@ -1586,10 +1597,10 @@ def page_author_intelligence(D):
                 st.plotly_chart(fig, width='stretch', key="ai_cls_pie")
 
         with c4:
-            st.markdown("#### Files by Extension")
+            st.markdown("#### File per Estensione")
             if ext_counter:
-                df = pd.DataFrame(ext_counter.most_common(8), columns=["Extension", "Count"])
-                fig = px.pie(df, values="Count", names="Extension",
+                df = pd.DataFrame(ext_counter.most_common(8), columns=["Estensione", "Conteggio"])
+                fig = px.pie(df, values="Conteggio", names="Estensione",
                              color_discrete_sequence=px.colors.qualitative.Pastel,
                              hole=0.4)
                 fig.update_layout(**_plotly_layout(260, margin=dict(l=5, r=5, t=10, b=5),
@@ -1604,19 +1615,19 @@ def page_author_intelligence(D):
         # --- Row 3: Top Files by Commits & Churn ---
         c5, c6 = st.columns(2)
         with c5:
-            st.markdown("#### Top Files by Commit Frequency")
+            st.markdown("#### Top File per Frequenza di Commit")
             if top_files:
                 df = pd.DataFrame(top_files)[["filename", "commits", "additions", "deletions"]]
-                df.columns = ["File", "Commits", "Lines +", "Lines −"]
+                df.columns = ["File", "Commit", "Righe +", "Righe −"]
                 df["File"] = df["File"].apply(lambda x: x.split("/")[-1] if "/" in x else x)
-                fig = px.bar(df, x="Commits", y="File", orientation="h",
+                fig = px.bar(df, x="Commit", y="File", orientation="h",
                              color_discrete_sequence=["#c070e0"])
                 fig.update_layout(**_plotly_layout(min(380, 40 + len(top_files) * 22)))
                 fig.update_layout(yaxis=dict(autorange="reversed"))
                 st.plotly_chart(fig, width='stretch', key="ai_topfiles")
 
         with c6:
-            st.markdown("#### Top Files by Code Churn")
+            st.markdown("#### File Principali per Variazione del Codice")
             if top_churn:
                 df = pd.DataFrame(top_churn)
                 df["churn"] = df["additions"] + df["deletions"]
@@ -1630,7 +1641,7 @@ def page_author_intelligence(D):
         # --- Row 4: Cumulative Lines & Weekly Heatmap ---
         c7, c8 = st.columns(2)
         with c7:
-            st.markdown("#### Cumulative Lines Over Time")
+            st.markdown("#### Linee Cumulative nel Tempo")
             if enriched:
                 cum_add, cum_del = 0, 0
                 cum_data = []
@@ -1646,12 +1657,12 @@ def page_author_intelligence(D):
                 fig.add_trace(go.Scatter(x=df["Date"], y=df["Removed"], mode="lines",
                                          name="Cumulative −", line=dict(color="#ef4444", width=2)))
                 fig.add_trace(go.Scatter(x=df["Date"], y=df["Net"], mode="lines",
-                                         name="Net", line=dict(color="#7c5cfc", width=2, dash="dot")))
+                                         name="Netto", line=dict(color="#7c5cfc", width=2, dash="dot")))
                 fig.update_layout(**_plotly_layout(280))
                 st.plotly_chart(fig, width='stretch', key="ai_cumulative")
 
         with c8:
-            st.markdown("#### Commits by Day of Week")
+            st.markdown("#### Commit per Giorno della Settimana")
             if ac:
                 days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
                 dow_counter = Counter(c["date"].strftime("%a") for c in ac if c["date"])
@@ -1663,36 +1674,36 @@ def page_author_intelligence(D):
                 st.plotly_chart(fig, width='stretch', key="ai_dow")
 
         # --- Row 5: Commit Size Distribution ---
-        st.markdown("#### Commit Size Distribution")
+        st.markdown("#### Distribuzione delle Dimensioni dei Commit")
         if enriched:
             sizes = [e["additions"] + e["deletions"] for e in enriched]
-            fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
-                               x="Lines Changed", nbins=30,
+            fig = px.histogram(pd.DataFrame({"Righe Modificate": sizes}),
+                               x="Righe Modificate", nbins=30,
                                color_discrete_sequence=["#7c5cfc"])
             fig.update_layout(**_plotly_layout(250))
             st.plotly_chart(fig, width='stretch', key="ai_sizedist")
 
         # --- Full Commit Details Table ---
-        st.markdown("#### Full Commit History")
+        st.markdown("#### Storico Completo dei Commit")
         if enriched:
             df = pd.DataFrame(enriched)[
                 ["sha", "message", "date_str", "additions", "deletions", "files_changed", "file_names"]]
-            df.columns = ["SHA", "Message", "Date", "Lines +", "Lines −", "Files", "File Names"]
+            df.columns = ["SHA", "Messaggio", "Data", "Righe +", "Righe −", "File", "Nomi File"]
             st.dataframe(df, width='stretch', hide_index=True,
                          height=min(600, 60 + len(enriched) * 35))
 
         # --- Detailed File Table ---
-        st.markdown("#### All Files Touched")
+        st.markdown("#### Tutti i File Modificati")
         if file_analysis:
             fa_list = sorted(file_analysis.values(), key=lambda x: -x["commits"])
             df = pd.DataFrame(fa_list)[["filename", "classification", "extension",
                                         "commits", "additions", "deletions", "net"]]
-            df.columns = ["File Path", "Category", "Extension", "Commits", "Lines +", "Lines −", "Net"]
+            df.columns = ["Percorso File", "Categoria", "Estensione", "Commit", "Righe +", "Righe −", "Netto"]
             st.dataframe(df, width='stretch', hide_index=True,
                          height=min(500, 60 + len(fa_list) * 35))
 
         # --- Export as PDF ---
-        st.markdown("#### Export")
+        st.markdown("#### Esportazione")
         rd = {
             "author": selected, "name": si["name"],
             "owner": owner, "repo": repo, "branch": D["branch"],
@@ -1703,18 +1714,18 @@ def page_author_intelligence(D):
             "first_date": _fmt(f), "last_date": _fmt(l),
         }
         # Build chart images for PDF
-        with st.spinner("Rendering charts for PDF (this may take 30-60 seconds)..."):
+        with st.spinner("Rendering dei grafici per il PDF (potrebbe richiedere 30-60 secondi)..."):
             chart_images = _build_author_chart_images(
                 enriched, ac, cls_counter, ext_counter, top_files, top_churn)
         if chart_images:
-            st.success(f"{len(chart_images)} of 9 charts rendered for PDF.")
+            st.success(f"{len(chart_images)} di 9 grafici generati per il PDF.")
         else:
-            st.warning("Chart rendering failed (kaleido/Chromium may not be available). "
-                       "PDF will be generated without charts.")
-        with st.spinner("Generating PDF report..."):
+            st.warning("Rendering dei grafici fallito (kaleido/Chromium potrebbe non essere disponibile). "
+                       "Il PDF verr\u00e0 generato senza grafici.")
+        with st.spinner("Generazione del report PDF in corso..."):
             pdf_bytes = _gen_author_pdf(rd, enriched, file_analysis, chart_images)
         st.download_button(
-            "Download Author Report (PDF)", pdf_bytes,
+            "Scarica Report Autore (PDF)", pdf_bytes,
             f"{repo}_{D['branch']}_{selected}_report.pdf",
             "application/pdf",
         )
@@ -1725,8 +1736,8 @@ def page_author_intelligence(D):
 # ═══════════════════════════════════════════════════════════════
 
 def page_project_timeline(D):
-    _section_hdr("Project Timeline",
-                 "Deadline tracking with GitHub-backed CSV persistence")
+    _section_hdr("Cronologia del Progetto",
+                 "Monitoraggio delle scadenze con persistenza CSV su GitHub")
 
     owner, repo, branch = D["owner"], D["repo"], D["branch"]
 
@@ -1747,8 +1758,8 @@ def page_project_timeline(D):
     initial_row = next((r for r in rows if r.get("type") == "initial"), None)
     extensions = [r for r in rows if r.get("type") == "extension"]
 
-    # ── 1. Initial Deadline ──
-    st.markdown("#### Initial Deadline")
+    # ── 1. Scadenza Iniziale ──
+    st.markdown("#### Scadenza Iniziale")
     init_date_val = None
     if initial_row:
         try:
@@ -1759,62 +1770,62 @@ def page_project_timeline(D):
     ic1, ic2 = st.columns([2, 1])
     with ic1:
         init_date = st.date_input(
-            "Project Deadline",
+            "Scadenza del Progetto",
             value=init_date_val,
-            help="The original project delivery deadline",
+            help="La scadenza di consegna originale del progetto",
             key="tl_init_date",
         )
     with ic2:
         st.markdown("")
         st.markdown("")
-        if st.button("Set Initial Deadline", type="primary", key="tl_set_init"):
+        if st.button("Imposta Scadenza Iniziale", type="primary", key="tl_set_init"):
             # Remove any old initial row, add new one
             new_rows = [r for r in rows if r.get("type") != "initial"]
             new_rows.insert(0, {
                 "type": "initial",
                 "date": init_date.isoformat(),
-                "reason": "Original project deadline",
+                "reason": "Scadenza originale del progetto",
                 "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             })
             try:
                 resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
                 st.session_state.tl_rows = new_rows
                 st.session_state.tl_sha = resp.get("content", {}).get("sha")
-                st.success("Initial deadline saved to GitHub.")
+                st.success("Scadenza iniziale salvata su GitHub.")
                 st.rerun()
             except Exception as e:
-                st.error(f"Failed to save: {e}")
+                st.error(f"Salvataggio fallito: {e}")
 
     if initial_row:
-        st.caption(f"Current deadline: **{initial_row['date']}**")
+        st.caption(f"Scadenza corrente: **{initial_row['date']}**")
 
     st.markdown("---")
 
     # ── 2. Extended Deadlines ──
-    st.markdown("#### Extended Deadlines")
+    st.markdown("#### Scadenze Prorogate")
 
     if extensions:
         ext_df = pd.DataFrame(extensions)
         ext_df = ext_df[["date", "reason", "created_at"]].copy()
-        ext_df.columns = ["Extended Date", "Reason", "Added On"]
+        ext_df.columns = ["Data Prorogata", "Motivo", "Aggiunta il"]
         ext_df.index = range(1, len(ext_df) + 1)
         ext_df.index.name = "#"
         st.dataframe(ext_df, width='stretch')
     else:
-        st.caption("No extensions recorded yet.")
+        st.caption("Nessuna proroga registrata.")
 
-    st.markdown("##### Add Extension")
+    st.markdown("##### Aggiungi Proroga")
     ec1, ec2 = st.columns([1, 2])
     with ec1:
-        ext_date = st.date_input("New Extended Deadline", value=dt.date.today(), key="tl_ext_date")
+        ext_date = st.date_input("Nuova Scadenza Prorogata", value=dt.date.today(), key="tl_ext_date")
     with ec2:
-        ext_reason = st.text_input("Reason for Extension", placeholder="e.g. Scope change, resource delay...", key="tl_ext_reason")
+        ext_reason = st.text_input("Motivo della Proroga", placeholder="Es. Cambio di ambito, ritardo risorse...", key="tl_ext_reason")
 
     ebc1, ebc2, ebc3 = st.columns([1, 1, 2])
     with ebc1:
-        if st.button("Add Extension", type="primary", key="tl_add_ext"):
+        if st.button("Aggiungi Proroga", type="primary", key="tl_add_ext"):
             if not ext_reason.strip():
-                st.warning("Please provide a reason for the extension.")
+                st.warning("Inserisci un motivo per la proroga.")
             else:
                 new_rows = list(rows)
                 new_rows.append({
@@ -1827,13 +1838,13 @@ def page_project_timeline(D):
                     resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
                     st.session_state.tl_rows = new_rows
                     st.session_state.tl_sha = resp.get("content", {}).get("sha")
-                    st.success("Extension added and saved to GitHub.")
+                    st.success("Proroga aggiunta e salvata su GitHub.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Failed to save: {e}")
+                    st.error(f"Salvataggio fallito: {e}")
 
     with ebc2:
-        if extensions and st.button("Remove Last Extension", key="tl_rm_ext"):
+        if extensions and st.button("Rimuovi Ultima Proroga", key="tl_rm_ext"):
             new_rows = list(rows)
             # Remove last extension
             for i in range(len(new_rows) - 1, -1, -1):
@@ -1844,24 +1855,24 @@ def page_project_timeline(D):
                 resp = _write_timeline_csv(owner, repo, branch, new_rows, sha)
                 st.session_state.tl_rows = new_rows
                 st.session_state.tl_sha = resp.get("content", {}).get("sha")
-                st.success("Last extension removed.")
+                st.success("Ultima proroga rimossa.")
                 st.rerun()
             except Exception as e:
-                st.error(f"Failed to save: {e}")
+                st.error(f"Salvataggio fallito: {e}")
 
     st.markdown("---")
 
     # ── 3. Visual Timeline ──
-    st.markdown("#### Project Timeline Overview")
+    st.markdown("#### Panoramica della Cronologia")
 
     if not initial_row:
-        st.caption("Set an initial deadline to see the timeline visualization.")
+        st.caption("Imposta una scadenza iniziale per visualizzare la cronologia.")
         return
 
     try:
         init_dt = dt.date.fromisoformat(initial_row["date"])
     except Exception:
-        st.caption("Invalid initial deadline date.")
+        st.caption("Data di scadenza iniziale non valida.")
         return
 
     # Collect all dates for the timeline
@@ -1879,10 +1890,10 @@ def page_project_timeline(D):
 
     # Development period (start → initial deadline)
     timeline_items.append({
-        "Task": "Development Period",
+        "Task": "Periodo di Sviluppo",
         "Start": dt.datetime.combine(project_start, dt.time(0)),
         "End": dt.datetime.combine(init_dt, dt.time(23, 59)),
-        "Type": "Development",
+        "Type": "Sviluppo",
     })
 
     # Extension periods
@@ -1893,10 +1904,10 @@ def page_project_timeline(D):
         except Exception:
             continue
         timeline_items.append({
-            "Task": f"Extension {i}: {ext.get('reason', '')}",
+            "Task": f"Proroga {i}: {ext.get('reason', '')}",
             "Start": dt.datetime.combine(prev_date, dt.time(0)),
             "End": dt.datetime.combine(ext_dt, dt.time(23, 59)),
-            "Type": "Extension",
+            "Type": "Proroga",
         })
         prev_date = ext_dt
 
@@ -1904,18 +1915,18 @@ def page_project_timeline(D):
     final_deadline = prev_date
     if today > final_deadline:
         timeline_items.append({
-            "Task": "Overdue",
+            "Task": "In Ritardo",
             "Start": dt.datetime.combine(final_deadline, dt.time(0)),
             "End": dt.datetime.combine(today, dt.time(23, 59)),
-            "Type": "Overdue",
+            "Type": "In Ritardo",
         })
 
     if timeline_items:
         tl_df = pd.DataFrame(timeline_items)
         color_map = {
-            "Development": "#7c5cfc",
-            "Extension": "#f0a080",
-            "Overdue": "#ef4444",
+            "Sviluppo": "#7c5cfc",
+            "Proroga": "#f0a080",
+            "In Ritardo": "#ef4444",
         }
         fig = px.timeline(
             tl_df, x_start="Start", x_end="End", y="Task", color="Type",
@@ -1941,7 +1952,7 @@ def page_project_timeline(D):
         _deadline_x = init_dt.isoformat()
         fig.add_shape(type="line", x0=_deadline_x, x1=_deadline_x, y0=0, y1=1,
                       yref="paper", line=dict(color="#ef4444", width=2, dash="dash"))
-        fig.add_annotation(x=_deadline_x, y=1, yref="paper", text="Deadline",
+        fig.add_annotation(x=_deadline_x, y=1, yref="paper", text="Scadenza",
                            showarrow=False, font=dict(color="#ef4444", size=11),
                            yshift=10)
         for ext in extensions:
@@ -1956,7 +1967,7 @@ def page_project_timeline(D):
         _today_x = today.isoformat()
         fig.add_shape(type="line", x0=_today_x, x1=_today_x, y0=0, y1=1,
                       yref="paper", line=dict(color="#10b981", width=2))
-        fig.add_annotation(x=_today_x, y=1, yref="paper", text="Today",
+        fig.add_annotation(x=_today_x, y=1, yref="paper", text="Oggi",
                            showarrow=False, font=dict(color="#10b981", size=11),
                            yshift=10)
 
@@ -1969,28 +1980,28 @@ def page_project_timeline(D):
     total_extensions = len(extensions)
     days_extended = (final_deadline - init_dt).days if extensions else 0
 
-    status = "On Track" if days_remaining >= 0 else "Overdue"
+    status = "In Regola" if days_remaining >= 0 else "In Ritardo"
     status_color = "#10b981" if days_remaining >= 0 else "#ef4444"
 
     _metric_row([
-        ("Status", f'<span style="color:{status_color};font-weight:700">{status}</span>'),
-        ("Days Remaining", str(max(days_remaining, 0))),
-        ("Days Elapsed", str(days_elapsed)),
-        ("Total Duration", f"{days_total} days"),
-        ("Extensions", str(total_extensions)),
-        ("Days Extended", str(days_extended)),
+        ("Stato", f'<span style="color:{status_color};font-weight:700">{status}</span>'),
+        ("Giorni Rimanenti", str(max(days_remaining, 0))),
+        ("Giorni Trascorsi", str(days_elapsed)),
+        ("Durata Totale", f"{days_total} giorni"),
+        ("Proroghe", str(total_extensions)),
+        ("Giorni di Proroga", str(days_extended)),
     ])
 
     st.markdown("---")
 
     # ── Milestones ──
-    st.markdown("#### Milestones")
+    st.markdown("#### Traguardi")
     if D["milestones"]:
         mdf = pd.DataFrame(D["milestones"])[["title", "state", "open_issues", "closed_issues", "due_str"]]
-        mdf.columns = ["Milestone", "State", "Open", "Closed", "Due"]
+        mdf.columns = ["Traguardo", "Stato", "Aperte", "Chiuse", "Scadenza"]
         st.dataframe(mdf, width='stretch', hide_index=True)
     else:
-        st.caption("No milestones defined for this repository.")
+        st.caption("Nessun traguardo definito per questo repository.")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1998,76 +2009,76 @@ def page_project_timeline(D):
 # ═══════════════════════════════════════════════════════════════
 
 def page_compliance_hub(D):
-    _section_hdr("Compliance Hub",
-                 "ISO 27001 evidence collection and report generation",
+    _section_hdr("Centro Conformità",
+                 "Raccolta delle evidenze ISO 27001 e generazione dei report",
                  iso="Full Annex A")
 
     st.markdown("""
-    This section generates structured documentation that maps directly to **ISO 27001 Annex A** controls.
-    Each report section provides evidence for specific control areas required during audits.
+    Questa sezione genera documentazione strutturata che corrisponde direttamente ai controlli dell'**Allegato A della ISO 27001**.
+    Ogni sezione del report fornisce evidenze per le specifiche aree di controllo richieste durante gli audit.
     """)
 
     # Control mapping
-    st.markdown("#### ISO 27001 Control Mapping")
+    st.markdown("#### Mappatura Controlli ISO 27001")
     controls = [
-        {"Control": "A.8 \u2014 Asset Management",
-         "Evidence": "File inventory, language distribution, asset classification",
-         "Status": "\u2705 Available" if D["files"] else "\u26a0\ufe0f No data",
-         "Source": "Asset Inventory"},
-        {"Control": "A.9 \u2014 Access Control",
-         "Evidence": "Contributor registry, activity patterns, access levels",
-         "Status": "\u2705 Available" if D["author_stats"] else "\u26a0\ufe0f No data",
-         "Source": "Access Registry"},
-        {"Control": "A.12 \u2014 Operations Security",
-         "Evidence": "Complete change log, change frequency, author attribution",
-         "Status": "\u2705 Available" if D["commits"] else "\u26a0\ufe0f No data",
-         "Source": "Change Ledger"},
-        {"Control": "A.14 \u2014 System Development Security",
-         "Evidence": "PR lifecycle, code review coverage, merge history",
-         "Status": "\u2705 Available" if D["pulls"] else "\u26a0\ufe0f No data",
-         "Source": "Pull Requests"},
-        {"Control": "A.16 \u2014 Incident Management",
-         "Evidence": "Issue tracking, resolution times, severity categorization",
-         "Status": "\u2705 Available" if D["issues"] else "\u26a0\ufe0f No data",
-         "Source": "Incident Log"},
+        {"Controllo": "A.8 \u2014 Gestione degli Asset",
+         "Evidenza": "Inventario file, distribuzione linguaggi, classificazione asset",
+         "Stato": "\u2705 Disponibile" if D["files"] else "\u26a0\ufe0f Dati assenti",
+         "Fonte": "Inventario degli Asset"},
+        {"Controllo": "A.9 \u2014 Controllo degli Accessi",
+         "Evidenza": "Registro contributori, pattern di attività, livelli di accesso",
+         "Stato": "\u2705 Disponibile" if D["author_stats"] else "\u26a0\ufe0f Dati assenti",
+         "Fonte": "Registro degli Accessi"},
+        {"Controllo": "A.12 \u2014 Sicurezza delle Operazioni",
+         "Evidenza": "Registro completo modifiche, frequenza modifiche, attribuzione autori",
+         "Stato": "\u2705 Disponibile" if D["commits"] else "\u26a0\ufe0f Dati assenti",
+         "Fonte": "Registro delle Modifiche"},
+        {"Controllo": "A.14 \u2014 Sicurezza dello Sviluppo",
+         "Evidenza": "Ciclo di vita PR, copertura revisione codice, storico merge",
+         "Stato": "\u2705 Disponibile" if D["pulls"] else "\u26a0\ufe0f Dati assenti",
+         "Fonte": "Pull Request"},
+        {"Controllo": "A.16 \u2014 Gestione degli Incidenti",
+         "Evidenza": "Monitoraggio issue, tempi di risoluzione, categorizzazione severità",
+         "Stato": "\u2705 Disponibile" if D["issues"] else "\u26a0\ufe0f Dati assenti",
+         "Fonte": "Registro degli Incidenti"},
     ]
     st.dataframe(pd.DataFrame(controls), width='stretch', hide_index=True)
 
     st.markdown("---")
 
-    st.markdown("#### Generate Compliance Report")
-    st.markdown("Export a comprehensive PDF document covering all ISO 27001 control evidence from this branch.")
+    st.markdown("#### Genera Report di Conformità")
+    st.markdown("Esporta un documento PDF completo con tutte le evidenze dei controlli ISO 27001 per questo branch.")
 
     scope = st.multiselect(
-        "Report Sections",
-        ["Executive Summary", "Asset Inventory (A.8)", "Access Control (A.9)",
-         "Change Management (A.12)", "Development Security (A.14)",
-         "Incident Management (A.16)", "Full Audit Trail"],
-        default=["Executive Summary", "Asset Inventory (A.8)", "Access Control (A.9)",
-                 "Change Management (A.12)", "Development Security (A.14)",
-                 "Incident Management (A.16)"],
+        "Sezioni del Report",
+        ["Riepilogo Esecutivo", "Inventario degli Asset (A.8)", "Controllo degli Accessi (A.9)",
+         "Gestione delle Modifiche (A.12)", "Sicurezza dello Sviluppo (A.14)",
+         "Gestione degli Incidenti (A.16)", "Registro Completo di Audit"],
+        default=["Riepilogo Esecutivo", "Inventario degli Asset (A.8)", "Controllo degli Accessi (A.9)",
+                 "Gestione delle Modifiche (A.12)", "Sicurezza dello Sviluppo (A.14)",
+                 "Gestione degli Incidenti (A.16)"],
     )
 
-    if st.button("Generate Compliance Report", type="primary"):
-        with st.spinner("Generating compliance report..."):
+    if st.button("Genera Report di Conformità", type="primary"):
+        with st.spinner("Generazione del report di conformità in corso..."):
             pdf_bytes = _gen_compliance_pdf(D, scope)
             st.download_button(
-                "Download Compliance Report (PDF)", pdf_bytes,
+                "Scarica Report di Conformità (PDF)", pdf_bytes,
                 f"ISO27001_{D['repo']}_{D['branch']}_{dt.date.today().isoformat()}.pdf",
                 "application/pdf",
             )
-            st.success("Report generated successfully.")
+            st.success("Report generato con successo.")
 
     st.markdown("")
-    st.markdown("#### Compliance Readiness Summary")
+    st.markdown("#### Riepilogo della Prontezza di Conformità")
 
-    avail = sum(1 for c in controls if "\u2705" in c["Status"])
+    avail = sum(1 for c in controls if "\u2705" in c["Stato"])
     pct = avail / len(controls) * 100 if controls else 0
     _metric_row([
-        ("Controls Covered", f"{avail}/{len(controls)}"),
-        ("Readiness", f"{pct:.0f}%"),
-        ("Branch Scope", D["branch"]),
-        ("Report Date", dt.date.today().isoformat()),
+        ("Controlli Coperti", f"{avail}/{len(controls)}"),
+        ("Prontezza", f"{pct:.0f}%"),
+        ("Ambito del Branch", D["branch"]),
+        ("Data del Report", dt.date.today().isoformat()),
     ])
 
 
@@ -2095,14 +2106,14 @@ def _gen_compliance_report(D, sections):
     oi = [i for i in D["issues"] if i["state"] == "open"]
     ci = [i for i in D["issues"] if i["state"] == "closed"]
     rts = [i["resolution_days"] for i in ci if i["resolution_days"] is not None]
-    ar = f"{sum(rts) / len(rts):.0f} days" if rts else "\u2014"
+    ar = f"{sum(rts) / len(rts):.0f} giorni" if rts else "\u2014"
 
     audit = []
     for c in D["commits"]:
         audit.append({"date": c["date_str"], "type": "Commit",
                       "author": c["author_id"], "ref": c["sha"], "desc": c["message"]})
     for i in D["issues"]:
-        audit.append({"date": i["created_str"], "type": "Issue",
+        audit.append({"date": i["created_str"], "type": "Segnalazione",
                       "author": i["author"] or "\u2014", "ref": f"#{i['number']}", "desc": i["title"]})
     for p in D["branch_pulls"]:
         audit.append({"date": p["created_str"], "type": "PR",
@@ -2127,10 +2138,10 @@ def _gen_compliance_report(D, sections):
 
 
 _COMPLIANCE_TPL = Template(r"""<!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="UTF-8">
-<title>ISO 27001 Compliance Report</title>
+<title>Report di Conformità ISO 27001</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#ffffff;color:#374151;line-height:1.7}
@@ -2157,43 +2168,43 @@ tr:nth-child(even) td{background:#faf9ff}
 </head>
 <body>
 <div class="hdr">
-<h1>ISO 27001 Compliance Evidence Report</h1>
+<h1>Report di Evidenza di Conformità ISO 27001</h1>
 <div class="m">Repository: <strong>{{ owner }}/{{ repo }}</strong> &middot; Branch: <strong>{{ branch }}</strong><br>
-Generated: {{ now }} &middot; Scope: Branch-level software development audit</div>
-<div class="b">ISO/IEC 27001:2022 &mdash; Annex A</div>
+Generato: {{ now }} &middot; Ambito: Audit dello sviluppo software a livello di branch</div>
+<div class="b">ISO/IEC 27001:2022 &mdash; Allegato A</div>
 </div>
 <div class="ct">
 
-{% if "Executive Summary" in secs %}
+{% if "Riepilogo Esecutivo" in secs %}
 <div class="sec">
-<h2>Executive Summary</h2>
-<p>This report provides structured evidence for ISO 27001 compliance covering the software development activities on the <strong>{{ branch }}</strong> branch of the <strong>{{ repo }}</strong> repository. The data covers {{ n_commits }} tracked changes by {{ n_authors }} contributors across {{ n_files }} tracked files.</p>
+<h2>Riepilogo Esecutivo</h2>
+<p>Questo report fornisce evidenze strutturate per la conformità ISO 27001, coprendo le attività di sviluppo software sul branch <strong>{{ branch }}</strong> del repository <strong>{{ repo }}</strong>. I dati comprendono {{ n_commits }} modifiche tracciate da {{ n_authors }} contributori su {{ n_files }} file monitorati.</p>
 <div class="gr">
-<div class="cd"><div class="l">Total Changes</div><div class="v">{{ n_commits }}</div></div>
-<div class="cd"><div class="l">Contributors</div><div class="v">{{ n_authors }}</div></div>
-<div class="cd"><div class="l">Files Tracked</div><div class="v">{{ n_files }}</div></div>
-<div class="cd"><div class="l">Issues</div><div class="v">{{ n_issues }}</div></div>
-<div class="cd"><div class="l">Pull Requests</div><div class="v">{{ n_prs }}</div></div>
-<div class="cd"><div class="l">Health Score</div><div class="v">{{ health }}/100</div></div>
+<div class="cd"><div class="l">Modifiche Totali</div><div class="v">{{ n_commits }}</div></div>
+<div class="cd"><div class="l">Contributori</div><div class="v">{{ n_authors }}</div></div>
+<div class="cd"><div class="l">File Monitorati</div><div class="v">{{ n_files }}</div></div>
+<div class="cd"><div class="l">Segnalazioni</div><div class="v">{{ n_issues }}</div></div>
+<div class="cd"><div class="l">Pull Request</div><div class="v">{{ n_prs }}</div></div>
+<div class="cd"><div class="l">Punteggio di Salute</div><div class="v">{{ health }}/100</div></div>
 </div>
-<p style="margin-top:14px;font-size:.85rem;color:#6b7280;"><strong>Health Score Methodology:</strong>
-Base score 50. Commit ≤7 d → +20, ≤30 d → +12, ≤90 d → +5, >90 d → −10, none → −15.
-Issue close ratio × 15 pts. PR merge ratio × 15 pts. ≥3 contributors → +10, 2 → +5. Clamped 0–100.</p>
+<p style="margin-top:14px;font-size:.85rem;color:#6b7280;"><strong>Metodologia del Punteggio di Salute:</strong>
+Punteggio base 50. Commit ≤7 gg → +20, ≤30 gg → +12, ≤90 gg → +5, >90 gg → −10, nessuno → −15.
+Rapporto chiusura issue × 15 punti. Rapporto merge PR × 15 punti. ≥3 contributori → +10, 2 → +5. Limitato 0–100.</p>
 </div>
 {% endif %}
 
-{% if "Asset Inventory (A.8)" in secs %}
+{% if "Inventario degli Asset (A.8)" in secs %}
 <div class="sec">
-<h2>Asset Inventory <span class="it">A.8</span></h2>
-<p>Information asset register detailing all tracked files, their classification, and size.</p>
-<h3>Asset Classification Summary</h3>
-<table><thead><tr><th>Classification</th><th>Count</th><th>Percentage</th></tr></thead><tbody>
+<h2>Inventario degli Asset <span class="it">A.8</span></h2>
+<p>Registro degli asset informativi che dettaglia tutti i file tracciati, la loro classificazione e dimensione.</p>
+<h3>Riepilogo della Classificazione degli Asset</h3>
+<table><thead><tr><th>Classificazione</th><th>Conteggio</th><th>Percentuale</th></tr></thead><tbody>
 {% for cls, cnt in classifications %}
 <tr><td>{{ cls }}</td><td>{{ cnt }}</td><td>{{ "%.1f"|format(cnt / n_files_safe * 100) }}%</td></tr>
 {% endfor %}
 </tbody></table>
-<h3>Language Distribution</h3>
-<table><thead><tr><th>Language</th><th>Bytes</th><th>Share</th></tr></thead><tbody>
+<h3>Distribuzione dei Linguaggi</h3>
+<table><thead><tr><th>Linguaggio</th><th>Byte</th><th>Quota</th></tr></thead><tbody>
 {% for lang, bts in languages %}
 <tr><td>{{ lang }}</td><td>{{ bts }}</td><td>{{ "%.1f"|format(bts / lang_total_safe * 100) }}%</td></tr>
 {% endfor %}
@@ -2201,11 +2212,11 @@ Issue close ratio × 15 pts. PR merge ratio × 15 pts. ≥3 contributors → +10
 </div>
 {% endif %}
 
-{% if "Access Control (A.9)" in secs %}
+{% if "Controllo degli Accessi (A.9)" in secs %}
 <div class="sec">
-<h2>Access Control <span class="it">A.9</span></h2>
-<p>Personnel with access to the branch and their recorded activity.</p>
-<table><thead><tr><th>Identifier</th><th>Name</th><th>Commits</th><th>First Active</th><th>Last Active</th><th>Days</th></tr></thead><tbody>
+<h2>Controllo degli Accessi <span class="it">A.9</span></h2>
+<p>Personale con accesso al branch e relativa attività registrata.</p>
+<table><thead><tr><th>Identificativo</th><th>Nome</th><th>Commit</th><th>Prima Attività</th><th>Ultima Attività</th><th>Giorni</th></tr></thead><tbody>
 {% for a in authors %}
 <tr><td>{{ a.id }}</td><td>{{ a.name }}</td><td>{{ a.commits }}</td><td>{{ a.first }}</td><td>{{ a.last }}</td><td>{{ a.days }}</td></tr>
 {% endfor %}
@@ -2213,63 +2224,63 @@ Issue close ratio × 15 pts. PR merge ratio × 15 pts. ≥3 contributors → +10
 </div>
 {% endif %}
 
-{% if "Change Management (A.12)" in secs %}
+{% if "Gestione delle Modifiche (A.12)" in secs %}
 <div class="sec">
-<h2>Change Management <span class="it">A.12 / A.14</span></h2>
-<p>Complete audit trail of all code changes on the branch.</p>
+<h2>Gestione delle Modifiche <span class="it">A.12 / A.14</span></h2>
+<p>Traccia di audit completa di tutte le modifiche al codice sul branch.</p>
 <div class="gr">
-<div class="cd"><div class="l">Total Changes</div><div class="v">{{ n_commits }}</div></div>
-<div class="cd"><div class="l">First Change</div><div class="v">{{ first_date }}</div></div>
-<div class="cd"><div class="l">Last Change</div><div class="v">{{ last_date }}</div></div>
+<div class="cd"><div class="l">Modifiche Totali</div><div class="v">{{ n_commits }}</div></div>
+<div class="cd"><div class="l">Prima Modifica</div><div class="v">{{ first_date }}</div></div>
+<div class="cd"><div class="l">Ultima Modifica</div><div class="v">{{ last_date }}</div></div>
 </div>
-<table><thead><tr><th>SHA</th><th>Date</th><th>Author</th><th>Description</th></tr></thead><tbody>
+<table><thead><tr><th>SHA</th><th>Data</th><th>Autore</th><th>Descrizione</th></tr></thead><tbody>
 {% for c in commits_list %}
 <tr><td><code>{{ c.sha }}</code></td><td>{{ c.date_str }}</td><td>{{ c.author_id }}</td><td>{{ c.message }}</td></tr>
 {% endfor %}
 </tbody></table>
-{% if n_commits > 200 %}<p style="color:#9ca3af;margin-top:8px;">Showing first 200 of {{ n_commits }} changes.</p>{% endif %}
+{% if n_commits > 200 %}<p style="color:#9ca3af;margin-top:8px;">Visualizzazione delle prime 200 di {{ n_commits }} modifiche.</p>{% endif %}
 </div>
 {% endif %}
 
-{% if "Development Security (A.14)" in secs %}
+{% if "Sicurezza dello Sviluppo (A.14)" in secs %}
 <div class="sec">
-<h2>Development Security <span class="it">A.14</span></h2>
-<p>Pull request lifecycle and code review process documentation.</p>
+<h2>Sicurezza dello Sviluppo <span class="it">A.14</span></h2>
+<p>Ciclo di vita delle pull request e documentazione del processo di revisione del codice.</p>
 {% if prs %}
-<table><thead><tr><th>#</th><th>Title</th><th>Status</th><th>Author</th><th>Head</th><th>Base</th><th>Created</th><th>Merged</th></tr></thead><tbody>
+<table><thead><tr><th>#</th><th>Titolo</th><th>Stato</th><th>Autore</th><th>Head</th><th>Base</th><th>Creata</th><th>Unita</th></tr></thead><tbody>
 {% for p in prs %}
 <tr><td>{{ p.number }}</td><td>{{ p.title }}</td><td>{{ p.state }}</td><td>{{ p.author }}</td><td>{{ p.head }}</td><td>{{ p.base }}</td><td>{{ p.created_str }}</td><td>{{ p.merged_str }}</td></tr>
 {% endfor %}
 </tbody></table>
-{% else %}<p style="color:#9ca3af;">No branch-related pull requests found.</p>{% endif %}
+{% else %}<p style="color:#9ca3af;">Nessuna pull request relativa al branch trovata.</p>{% endif %}
 </div>
 {% endif %}
 
-{% if "Incident Management (A.16)" in secs %}
+{% if "Gestione degli Incidenti (A.16)" in secs %}
 <div class="sec">
-<h2>Incident Management <span class="it">A.16</span></h2>
-<p>Issue tracking and resolution metrics.</p>
+<h2>Gestione degli Incidenti <span class="it">A.16</span></h2>
+<p>Monitoraggio delle segnalazioni e metriche di risoluzione.</p>
 <div class="gr">
-<div class="cd"><div class="l">Total Issues</div><div class="v">{{ n_issues }}</div></div>
-<div class="cd"><div class="l">Open</div><div class="v">{{ n_open_issues }}</div></div>
-<div class="cd"><div class="l">Closed</div><div class="v">{{ n_closed_issues }}</div></div>
-<div class="cd"><div class="l">Avg Resolution</div><div class="v">{{ avg_resolution }}</div></div>
+<div class="cd"><div class="l">Segnalazioni Totali</div><div class="v">{{ n_issues }}</div></div>
+<div class="cd"><div class="l">Aperte</div><div class="v">{{ n_open_issues }}</div></div>
+<div class="cd"><div class="l">Chiuse</div><div class="v">{{ n_closed_issues }}</div></div>
+<div class="cd"><div class="l">Risoluzione Media</div><div class="v">{{ avg_resolution }}</div></div>
 </div>
 {% if issues_list %}
-<table><thead><tr><th>#</th><th>Title</th><th>State</th><th>Reporter</th><th>Assignee</th><th>Labels</th><th>Created</th><th>Closed</th><th>Days</th></tr></thead><tbody>
+<table><thead><tr><th>#</th><th>Titolo</th><th>Stato</th><th>Segnalante</th><th>Assegnatario</th><th>Etichette</th><th>Creata</th><th>Chiusa</th><th>Giorni</th></tr></thead><tbody>
 {% for i in issues_list %}
 <tr><td>{{ i.number }}</td><td>{{ i.title }}</td><td>{{ i.state }}</td><td>{{ i.author or '&mdash;' }}</td><td>{{ i.assignee or '&mdash;' }}</td><td>{{ i.labels_str }}</td><td>{{ i.created_str }}</td><td>{{ i.closed_str }}</td><td>{{ i.resolution_days if i.resolution_days is not none else '&mdash;' }}</td></tr>
 {% endfor %}
 </tbody></table>
-{% else %}<p style="color:#9ca3af;">No issues found.</p>{% endif %}
+{% else %}<p style="color:#9ca3af;">Nessuna segnalazione trovata.</p>{% endif %}
 </div>
 {% endif %}
 
-{% if "Full Audit Trail" in secs %}
+{% if "Registro Completo di Audit" in secs %}
 <div class="sec">
-<h2>Full Audit Trail</h2>
-<p>Chronological record of all tracked events.</p>
-<table><thead><tr><th>Date</th><th>Type</th><th>Author</th><th>Ref</th><th>Description</th></tr></thead><tbody>
+<h2>Registro Completo di Audit</h2>
+<p>Registrazione cronologica di tutti gli eventi tracciati.</p>
+<table><thead><tr><th>Data</th><th>Tipo</th><th>Autore</th><th>Rif</th><th>Descrizione</th></tr></thead><tbody>
 {% for e in audit %}
 <tr><td>{{ e.date }}</td><td>{{ e.type }}</td><td>{{ e.author }}</td><td>{{ e.ref }}</td><td>{{ e.desc }}</td></tr>
 {% endfor %}
@@ -2278,7 +2289,7 @@ Issue close ratio × 15 pts. PR merge ratio × 15 pts. ≥3 contributors → +10
 {% endif %}
 
 </div>
-<div class="ft">ISO 27001 Compliance Report &middot; Generated by GAM Software PM &middot; {{ now }}<br>
+<div class="ft">Report di Conformità ISO 27001 &middot; Generato da GAM Software PM &middot; {{ now }}<br>
 Repository: {{ owner }}/{{ repo }} &middot; Branch: {{ branch }}</div>
 </body></html>""")
 
@@ -2309,7 +2320,7 @@ def _gen_compliance_pdf(D, sections):
     oi = [i for i in D["issues"] if i["state"] == "open"]
     ci = [i for i in D["issues"] if i["state"] == "closed"]
     rts = [i["resolution_days"] for i in ci if i["resolution_days"] is not None]
-    ar = f"{sum(rts) / len(rts):.0f} days" if rts else "\u2014"
+    ar = f"{sum(rts) / len(rts):.0f} giorni" if rts else "\u2014"
     hs = _health_score(D)
 
     audit = []
@@ -2317,7 +2328,7 @@ def _gen_compliance_pdf(D, sections):
         audit.append({"date": c["date_str"], "type": "Commit",
                       "author": c["author_id"], "ref": c["sha"], "desc": c["message"]})
     for i in D["issues"]:
-        audit.append({"date": i["created_str"], "type": "Issue",
+        audit.append({"date": i["created_str"], "type": "Segnalazione",
                       "author": i["author"] or "\u2014", "ref": f"#{i['number']}", "desc": i["title"]})
     for p in D["branch_pulls"]:
         audit.append({"date": p["created_str"], "type": "PR",
@@ -2357,8 +2368,8 @@ def _gen_compliance_pdf(D, sections):
         canvas.setFont("Helvetica", 7)
         canvas.drawCentredString(
             PW / 2, BM - 10 * mm,
-            f"ISO 27001 Compliance Report  \u00b7  {D['owner']}/{D['repo']}  \u00b7  "
-            f"{D['branch']}  \u00b7  Page {_page_count[0]}")
+            f"Report di Conformità ISO 27001  \u00b7  {D['owner']}/{D['repo']}  \u00b7  "
+            f"{D['branch']}  \u00b7  Pagina {_page_count[0]}")
         canvas.restoreState()
 
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -2415,37 +2426,37 @@ def _gen_compliance_pdf(D, sections):
         ]))
         return t
 
-    # ═══ TITLE PAGE ═══
+    # ═══ PAGINA DEL TITOLO ═══
     elements.append(Spacer(1, 30))
-    elements.append(Paragraph("ISO 27001 Compliance Evidence Report", sTitle))
+    elements.append(Paragraph("Report di Evidenza di Conformità ISO 27001", sTitle))
     elements.append(Paragraph(
         f"Repository: {D['owner']}/{D['repo']}<br/>"
         f"Branch: {D['branch']}<br/>"
-        f"Report Date: {dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}<br/>"
-        f"Scope: Branch-level software development audit", sSub))
+        f"Data del Report: {dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}<br/>"
+        f"Ambito: Audit dello sviluppo software a livello di branch", sSub))
     elements.append(Paragraph(
-        '<font color="#7c5cfc"><b>ISO/IEC 27001:2022 \u2014 Annex A</b></font>',
+        '<font color="#7c5cfc"><b>ISO/IEC 27001:2022 \u2014 Allegato A</b></font>',
         ParagraphStyle("CBadge", fontName="Helvetica-Bold", fontSize=10,
                        textColor=ACCENT, leading=14, spaceAfter=16)))
     elements.append(Spacer(1, 8))
 
-    # ═══ EXECUTIVE SUMMARY ═══
-    if "Executive Summary" in sections:
-        elements.append(Paragraph("Executive Summary", sH2))
+    # ═══ RIEPILOGO ESECUTIVO ═══
+    if "Riepilogo Esecutivo" in sections:
+        elements.append(Paragraph("Riepilogo Esecutivo", sH2))
         elements.append(Paragraph(
-            f"This report provides structured evidence for ISO 27001 compliance covering the "
-            f"software development activities on the <b>{D['branch']}</b> branch of the "
-            f"<b>{D['repo']}</b> repository. The data covers {len(D['commits'])} tracked changes "
-            f"by {len(D['author_stats'])} contributors across {len(D['files'])} tracked files.",
+            f"Questo report fornisce evidenze strutturate per la conformità ISO 27001, coprendo le "
+            f"attività di sviluppo software sul branch <b>{D['branch']}</b> del repository "
+            f"<b>{D['repo']}</b>. I dati comprendono {len(D['commits'])} modifiche tracciate "
+            f"da {len(D['author_stats'])} contributori su {len(D['files'])} file monitorati.",
             sBody))
         kpi_rows = []
         kpi_data = [
-            ("Total Changes", str(len(D["commits"]))),
-            ("Contributors", str(len(D["author_stats"]))),
-            ("Files Tracked", str(len(D["files"]))),
-            ("Issues", str(len(D["issues"]))),
-            ("Pull Requests", str(len(D["branch_pulls"]))),
-            ("Health Score", f"{hs}/100"),
+            ("Modifiche Totali", str(len(D["commits"]))),
+            ("Contributori", str(len(D["author_stats"]))),
+            ("File Monitorati", str(len(D["files"]))),
+            ("Segnalazioni", str(len(D["issues"]))),
+            ("Pull Request", str(len(D["branch_pulls"]))),
+            ("Punteggio di Salute", f"{hs}/100"),
         ]
         # 2 rows of 3 KPIs
         for i in range(0, len(kpi_data), 3):
@@ -2471,60 +2482,60 @@ def _gen_compliance_pdf(D, sections):
         elements.append(kt)
         elements.append(Spacer(1, 8))
         elements.append(Paragraph(
-            '<b>Health Score Methodology:</b> Base score 50. '
-            'Commit ≤7 d → +20, ≤30 d → +12, ≤90 d → +5, >90 d → −10, none → −15. '
-            'Issue close ratio × 15 pts. PR merge ratio × 15 pts. '
-            '≥3 contributors → +10, 2 → +5. Clamped 0–100.',
+            '<b>Metodologia del Punteggio di Salute:</b> Punteggio base 50. '
+            'Commit ≤7 gg → +20, ≤30 gg → +12, ≤90 gg → +5, >90 gg → −10, nessuno → −15. '
+            'Rapporto chiusura issue × 15 punti. Rapporto merge PR × 15 punti. '
+            '≥3 contributori → +10, 2 → +5. Limitato 0–100.',
             ParagraphStyle("CMethod", fontName="Helvetica", fontSize=8,
                            textColor=MUTED, leading=12, spaceAfter=10)))
 
-    # ═══ ASSET INVENTORY (A.8) ═══
-    if "Asset Inventory (A.8)" in sections:
+    # ═══ INVENTARIO DEGLI ASSET (A.8) ═══
+    if "Inventario degli Asset (A.8)" in sections:
         elements.append(PageBreak())
-        elements.append(Paragraph('Asset Inventory <font color="#7c5cfc">[A.8]</font>', sH2))
+        elements.append(Paragraph('Inventario degli Asset <font color="#7c5cfc">[A.8]</font>', sH2))
         elements.append(Paragraph(
-            "Information asset register detailing all tracked files, their classification, and size.",
+            "Registro degli asset informativi che dettaglia tutti i file tracciati, la loro classificazione e dimensione.",
             sBody))
         if classifications:
             n_safe = max(len(D["files"]), 1)
             rows = [[c, str(n), f"{n / n_safe * 100:.1f}%"] for c, n in classifications]
             elements.append(_std_table(
-                ["Classification", "Count", "Percentage"], rows,
+                ["Classificazione", "Conteggio", "Percentuale"], rows,
                 [W * 0.45, W * 0.25, W * 0.25], align_from=1))
             elements.append(Spacer(1, 10))
         if languages:
             lt = max(sum(D["languages"].values()), 1)
             rows = [[la, str(b), f"{b / lt * 100:.1f}%"] for la, b in languages]
-            elements.append(Paragraph("Language Distribution", ParagraphStyle(
+            elements.append(Paragraph("Distribuzione dei Linguaggi", ParagraphStyle(
                 "CLangH", fontName="Helvetica-Bold", fontSize=11,
                 textColor=DEEP, leading=16, spaceBefore=14, spaceAfter=8)))
             elements.append(_std_table(
-                ["Language", "Bytes", "Share"], rows,
+                ["Linguaggio", "Byte", "Quota"], rows,
                 [W * 0.40, W * 0.30, W * 0.25], align_from=1))
 
-    # ═══ ACCESS CONTROL (A.9) ═══
-    if "Access Control (A.9)" in sections:
+    # ═══ CONTROLLO DEGLI ACCESSI (A.9) ═══
+    if "Controllo degli Accessi (A.9)" in sections:
         elements.append(PageBreak())
-        elements.append(Paragraph('Access Control <font color="#7c5cfc">[A.9]</font>', sH2))
+        elements.append(Paragraph('Controllo degli Accessi <font color="#7c5cfc">[A.9]</font>', sH2))
         elements.append(Paragraph(
-            "Personnel with access to the branch and their recorded activity.", sBody))
+            "Personale con accesso al branch e relativa attività registrata.", sBody))
         if authors:
             rows = [[a["id"], a["name"], str(a["commits"]), a["first"], a["last"], str(a["days"])]
                     for a in authors]
             elements.append(_std_table(
-                ["Identifier", "Name", "Commits", "First Active", "Last Active", "Days"],
+                ["Identificativo", "Nome", "Commit", "Prima Attività", "Ultima Attività", "Giorni"],
                 rows, [W * 0.18, W * 0.18, W * 0.1, W * 0.18, W * 0.18, W * 0.1],
                 align_from=2))
 
-    # ═══ CHANGE MANAGEMENT (A.12) ═══
-    if "Change Management (A.12)" in sections:
+    # ═══ GESTIONE DELLE MODIFICHE (A.12) ═══
+    if "Gestione delle Modifiche (A.12)" in sections:
         elements.append(PageBreak())
-        elements.append(Paragraph('Change Management <font color="#7c5cfc">[A.12 / A.14]</font>', sH2))
+        elements.append(Paragraph('Gestione delle Modifiche <font color="#7c5cfc">[A.12 / A.14]</font>', sH2))
         elements.append(Paragraph(
-            "Complete audit trail of all code changes on the branch.", sBody))
-        # KPI strip
+            "Traccia di audit completa di tutte le modifiche al codice sul branch.", sBody))
+        # Barra KPI
         kstrip = [
-            [Paragraph("Total Changes", sKpiL), Paragraph("First Change", sKpiL), Paragraph("Last Change", sKpiL)],
+            [Paragraph("Modifiche Totali", sKpiL), Paragraph("Prima Modifica", sKpiL), Paragraph("Ultima Modifica", sKpiL)],
             [Paragraph(str(len(D["commits"])), sKpiV), Paragraph(fd, sKpiV), Paragraph(ld, sKpiV)],
         ]
         kst = Table(kstrip, colWidths=[W / 3] * 3)
@@ -2546,20 +2557,20 @@ def _gen_compliance_pdf(D, sections):
                     msg = msg[:77] + "..."
                 rows.append([c["sha"], c["date_str"], c["author_id"], msg])
             elements.append(_std_table(
-                ["SHA", "Date", "Author", "Description"], rows,
+                ["SHA", "Data", "Autore", "Descrizione"], rows,
                 [W * 0.08, W * 0.14, W * 0.14, W * 0.58]))
             if len(D["commits"]) > 200:
                 elements.append(Paragraph(
-                    f"Showing first 200 of {len(D['commits'])} changes.",
+                    f"Visualizzazione delle prime 200 di {len(D['commits'])} modifiche.",
                     ParagraphStyle("CTrunc", fontName="Helvetica", fontSize=8,
                                    textColor=MUTED, spaceBefore=4)))
 
-    # ═══ DEVELOPMENT SECURITY (A.14) ═══
-    if "Development Security (A.14)" in sections:
+    # ═══ SICUREZZA DELLO SVILUPPO (A.14) ═══
+    if "Sicurezza dello Sviluppo (A.14)" in sections:
         elements.append(PageBreak())
-        elements.append(Paragraph('Development Security <font color="#7c5cfc">[A.14]</font>', sH2))
+        elements.append(Paragraph('Sicurezza dello Sviluppo <font color="#7c5cfc">[A.14]</font>', sH2))
         elements.append(Paragraph(
-            "Pull request lifecycle and code review process documentation.", sBody))
+            "Ciclo di vita delle pull request e documentazione del processo di revisione del codice.", sBody))
         prs = D["branch_pulls"]
         if prs:
             rows = []
@@ -2570,22 +2581,22 @@ def _gen_compliance_pdf(D, sections):
                 rows.append([str(p["number"]), title, p["state"], p["author"],
                              p["head"], p["base"], p["created_str"], p.get("merged_str", "\u2014")])
             elements.append(_std_table(
-                ["#", "Title", "Status", "Author", "Head", "Base", "Created", "Merged"],
+                ["#", "Titolo", "Stato", "Autore", "Head", "Base", "Creata", "Unita"],
                 rows,
                 [W * 0.05, W * 0.22, W * 0.08, W * 0.1, W * 0.12, W * 0.12, W * 0.12, W * 0.12]))
         else:
-            elements.append(Paragraph("No branch-related pull requests found.", sBody))
+            elements.append(Paragraph("Nessuna pull request relativa al branch trovata.", sBody))
 
-    # ═══ INCIDENT MANAGEMENT (A.16) ═══
-    if "Incident Management (A.16)" in sections:
+    # ═══ GESTIONE DEGLI INCIDENTI (A.16) ═══
+    if "Gestione degli Incidenti (A.16)" in sections:
         elements.append(PageBreak())
-        elements.append(Paragraph('Incident Management <font color="#7c5cfc">[A.16]</font>', sH2))
+        elements.append(Paragraph('Gestione degli Incidenti <font color="#7c5cfc">[A.16]</font>', sH2))
         elements.append(Paragraph(
-            "Issue tracking and resolution metrics.", sBody))
-        # KPI strip
+            "Monitoraggio delle segnalazioni e metriche di risoluzione.", sBody))
+        # Barra KPI
         istrip = [
-            [Paragraph("Total Issues", sKpiL), Paragraph("Open", sKpiL),
-             Paragraph("Closed", sKpiL), Paragraph("Avg Resolution", sKpiL)],
+            [Paragraph("Segnalazioni Totali", sKpiL), Paragraph("Aperte", sKpiL),
+             Paragraph("Chiuse", sKpiL), Paragraph("Risoluzione Media", sKpiL)],
             [Paragraph(str(len(D["issues"])), sKpiV), Paragraph(str(len(oi)), sKpiV),
              Paragraph(str(len(ci)), sKpiV), Paragraph(ar, sKpiV)],
         ]
@@ -2611,16 +2622,16 @@ def _gen_compliance_pdf(D, sections):
                              i.get("closed_str", "\u2014"),
                              str(i["resolution_days"]) if i["resolution_days"] is not None else "\u2014"])
             elements.append(_std_table(
-                ["#", "Title", "State", "Reporter", "Assignee", "Labels", "Created", "Closed", "Days"],
+                ["#", "Titolo", "Stato", "Segnalante", "Assegnatario", "Etichette", "Creata", "Chiusa", "Giorni"],
                 rows,
                 [W * 0.04, W * 0.19, W * 0.07, W * 0.1, W * 0.1, W * 0.13, W * 0.1, W * 0.1, W * 0.06]))
 
-    # ═══ FULL AUDIT TRAIL ═══
-    if "Full Audit Trail" in sections:
+    # ═══ REGISTRO COMPLETO DI AUDIT ═══
+    if "Registro Completo di Audit" in sections:
         elements.append(PageBreak())
-        elements.append(Paragraph("Full Audit Trail", sH2))
+        elements.append(Paragraph("Registro Completo di Audit", sH2))
         elements.append(Paragraph(
-            "Chronological record of all tracked events.", sBody))
+            "Registrazione cronologica di tutti gli eventi tracciati.", sBody))
         if audit:
             rows = []
             for e in audit:
@@ -2629,17 +2640,17 @@ def _gen_compliance_pdf(D, sections):
                     desc = desc[:57] + "..."
                 rows.append([e["date"], e["type"], e["author"], e["ref"], desc])
             elements.append(_std_table(
-                ["Date", "Type", "Author", "Ref", "Description"],
+                ["Data", "Tipo", "Autore", "Rif", "Descrizione"],
                 rows, [W * 0.13, W * 0.08, W * 0.13, W * 0.08, W * 0.52]))
 
     # ── End ──
     elements.append(Spacer(1, 30))
-    elements.append(Paragraph("\u2014 End of Report \u2014", ParagraphStyle(
+    elements.append(Paragraph("\u2014 Fine del Report \u2014", ParagraphStyle(
         "CEndMark", fontName="Helvetica-Bold", fontSize=10,
         textColor=MUTED, alignment=TA_CENTER, leading=14)))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        f"Generated by GAM Software PM \u00b7 ISO 27001 Compliance Platform \u00b7 "
+        f"Generato da GAM Software PM \u00b7 Piattaforma di Conformità ISO 27001 \u00b7 "
         f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}", sFooter))
 
     doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
@@ -2704,7 +2715,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
             return None
         df = pd.DataFrame(sorted(dc.items()), columns=["Date", "Commits"])
         fig = px.bar(df, x="Date", y="Commits", color_discrete_sequence=["#7c5cfc"])
-        fig.update_layout(**_chart_layout("Daily Commit Activity", 400))
+        fig.update_layout(**_chart_layout("Attività di Commit Giornaliera", 400))
         return _fig_to_png_bytes(fig, 900, 400)
     _try_chart("daily_activity", _c1)
 
@@ -2716,15 +2727,15 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         df.columns = ["Date", "Additions", "Deletions"]
         df = df.groupby("Date", as_index=False).sum().sort_values("Date")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df["Date"], y=df["Additions"], name="Additions",
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Additions"], name="Aggiunte",
                                  fill="tozeroy", mode="lines",
                                  line=dict(color="#10b981", width=2),
                                  fillcolor="rgba(16,185,129,0.35)"))
-        fig.add_trace(go.Scatter(x=df["Date"], y=df["Deletions"], name="Deletions",
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Deletions"], name="Rimozioni",
                                  fill="tozeroy", mode="lines",
                                  line=dict(color="#ef4444", width=2),
                                  fillcolor="rgba(239,68,68,0.35)"))
-        fig.update_layout(**_chart_layout("Code Changes per Commit", 400))
+        fig.update_layout(**_chart_layout("Modifiche al Codice per Commit", 400))
         return _fig_to_png_bytes(fig, 900, 400)
     _try_chart("code_changes", _c2)
 
@@ -2735,7 +2746,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         df = pd.DataFrame(cls_counter.items(), columns=["Classification", "Count"])
         fig = px.pie(df, values="Count", names="Classification",
                      color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4)
-        fig.update_layout(**_chart_layout("Files by Classification", 350))
+        fig.update_layout(**_chart_layout("File per Classificazione", 350))
         fig.update_layout(margin=dict(l=30, r=30, t=50, b=60),
                           legend=dict(orientation="h", yanchor="top", y=-0.08,
                                       xanchor="center", x=0.5, font=dict(size=11)))
@@ -2750,7 +2761,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         df = pd.DataFrame(ext_counter.most_common(8), columns=["Extension", "Count"])
         fig = px.pie(df, values="Count", names="Extension",
                      color_discrete_sequence=px.colors.qualitative.Pastel, hole=0.4)
-        fig.update_layout(**_chart_layout("Files by Extension", 350))
+        fig.update_layout(**_chart_layout("File per Estensione", 350))
         fig.update_layout(margin=dict(l=30, r=30, t=50, b=60),
                           legend=dict(orientation="h", yanchor="top", y=-0.08,
                                       xanchor="center", x=0.5, font=dict(size=11)))
@@ -2768,7 +2779,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         fig = px.bar(df, x="Commits", y="File", orientation="h",
                      color_discrete_sequence=["#c070e0"])
         h = max(400, 60 + len(top_files) * 28)
-        fig.update_layout(**_chart_layout("Top Files by Commit Frequency", h))
+        fig.update_layout(**_chart_layout("Top File per Frequenza di Commit", h))
         fig.update_layout(yaxis=dict(autorange="reversed", title_text=""),
                           margin=dict(l=200, r=30, t=50, b=65))
         return _fig_to_png_bytes(fig, 900, h)
@@ -2784,7 +2795,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         fig = px.bar(df, x="churn", y="short", orientation="h",
                      color="churn", color_continuous_scale="YlOrRd")
         h = max(400, 60 + len(top_churn) * 28)
-        fig.update_layout(**_chart_layout("Top Files by Code Churn", h))
+        fig.update_layout(**_chart_layout("Top File per Variazione del Codice", h))
         fig.update_layout(yaxis=dict(autorange="reversed", title_text=""),
                           margin=dict(l=200, r=30, t=50, b=65),
                           coloraxis_showscale=False)
@@ -2824,7 +2835,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
                           columns=["Day", "Commits"])
         fig = px.bar(df, x="Day", y="Commits", color_discrete_sequence=["#f0a080"],
                      category_orders={"Day": days_of_week})
-        fig.update_layout(**_chart_layout("Commits by Day of Week", 380))
+        fig.update_layout(**_chart_layout("Commit per Giorno della Settimana", 380))
         return _fig_to_png_bytes(fig, 750, 380)
     _try_chart("day_of_week", _c8)
 
@@ -2836,7 +2847,7 @@ def _build_author_chart_images(enriched, ac, cls_counter, ext_counter, top_files
         fig = px.histogram(pd.DataFrame({"Lines Changed": sizes}),
                            x="Lines Changed", nbins=30,
                            color_discrete_sequence=["#7c5cfc"])
-        fig.update_layout(**_chart_layout("Commit Size Distribution", 380))
+        fig.update_layout(**_chart_layout("Distribuzione delle Dimensioni dei Commit", 380))
         return _fig_to_png_bytes(fig, 900, 380)
     _try_chart("size_dist", _c9)
 
@@ -2887,9 +2898,9 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         # Footer text
         canvas.setFillColor(MUTED)
         canvas.setFont("Helvetica", 7)
-        footer_txt = (f"GAM Software PM \u2014 ISO 27001 Compliance Platform  \u00b7  "
+        footer_txt = (f"GAM Software PM \u2014 Piattaforma di Conformit\u00e0 ISO 27001  \u00b7  "
                       f"{rd['owner']}/{rd['repo']} \u00b7 {rd['branch']}  \u00b7  "
-                      f"Page {_page_count[0]}")
+                      f"Pagina {_page_count[0]}")
         canvas.drawCentredString(PW / 2, B_MARGIN - 10 * mm, footer_txt)
         canvas.restoreState()
 
@@ -2926,32 +2937,32 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
 
     # ═══ TITLE PAGE ═══
     elements.append(Spacer(1, 30))
-    elements.append(Paragraph(f"Contributor Report", sTitle))
+    elements.append(Paragraph(f"Report del Contributore", sTitle))
     elements.append(Paragraph(f"{rd['author']}", ParagraphStyle(
         "AuthorName", fontName="Helvetica-Bold", fontSize=18,
         textColor=ACCENT, leading=24, spaceAfter=12)))
     elements.append(Paragraph(
         f"Repository: {rd['owner']}/{rd['repo']}<br/>"
         f"Branch: {rd['branch']}<br/>"
-        f"Report Date: {dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}<br/>"
-        f"Period: {rd['first_date']} — {rd['last_date']}", sSub))
+        f"Data del Report: {dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}<br/>"
+        f"Periodo: {rd['first_date']} — {rd['last_date']}", sSub))
     elements.append(Spacer(1, 8))
 
-    # ═══ SUMMARY METRICS ═══
-    elements.append(Paragraph("Summary Metrics", sH2))
+    # ═══ METRICHE RIEPILOGATIVE ═══
+    elements.append(Paragraph("Metriche Riepilogative", sH2))
 
     def _kpi_cell(label, value):
         return [Paragraph(label, sKpiLabel), Paragraph(str(value), sKpiValue)]
 
     kpi_grid = [
-        [_kpi_cell("Total Commits", rd["total_commits"]),
-         _kpi_cell("Lines Added", _fnum(rd["total_additions"])),
-         _kpi_cell("Lines Removed", _fnum(rd["total_deletions"])),
-         _kpi_cell("Net Lines", _fnum(rd["net_lines"]))],
-        [_kpi_cell("Unique Files", rd["unique_files"]),
-         _kpi_cell("Days Active", rd["days_active"]),
-         _kpi_cell("Avg Commits/Day", rd["avg_per_day"]),
-         _kpi_cell("Files/Commit", f"{rd['files_changed'] / max(rd['total_commits'], 1):.1f}")],
+        [_kpi_cell("Commit Totali", rd["total_commits"]),
+         _kpi_cell("Righe Aggiunte", _fnum(rd["total_additions"])),
+         _kpi_cell("Righe Rimosse", _fnum(rd["total_deletions"])),
+         _kpi_cell("Righe Nette", _fnum(rd["net_lines"]))],
+        [_kpi_cell("File Unici", rd["unique_files"]),
+         _kpi_cell("Giorni Attivi", rd["days_active"]),
+         _kpi_cell("Media Commit/Giorno", rd["avg_per_day"]),
+         _kpi_cell("File/Commit", f"{rd['files_changed'] / max(rd['total_commits'], 1):.1f}")],
     ]
     # Flatten into table rows (label row + value row per kpi row)
     kpi_rows = []
@@ -2976,17 +2987,17 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
     elements.append(kpi_table)
     elements.append(Spacer(1, 16))
 
-    # ═══ CHARTS ═══
+    # ═══ GRAFICI ═══
     chart_order = [
-        ("daily_activity", "Daily Commit Activity"),
-        ("code_changes", "Code Changes per Commit"),
-        ("file_class_pie", "Files by Classification"),
-        ("file_ext_pie", "Files by Extension"),
-        ("top_files", "Top Files by Commit Frequency"),
-        ("top_churn", "Top Files by Code Churn"),
-        ("cumulative", "Cumulative Lines Over Time"),
-        ("day_of_week", "Commits by Day of Week"),
-        ("size_dist", "Commit Size Distribution"),
+        ("daily_activity", "Attività di Commit Giornaliera"),
+        ("code_changes", "Modifiche al Codice per Commit"),
+        ("file_class_pie", "File per Classificazione"),
+        ("file_ext_pie", "File per Estensione"),
+        ("top_files", "Top File per Frequenza di Commit"),
+        ("top_churn", "Top File per Variazione del Codice"),
+        ("cumulative", "Linee Cumulative nel Tempo"),
+        ("day_of_week", "Commit per Giorno della Settimana"),
+        ("size_dist", "Distribuzione delle Dimensioni dei Commit"),
     ]
 
     charts_added = 0
@@ -3008,22 +3019,22 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         elements.append(Spacer(1, 14))
         charts_added += 1
 
-    # ═══ FILES TOUCHED TABLE ═══
+    # ═══ TABELLA FILE MODIFICATI ═══
     if file_analysis:
         elements.append(PageBreak())
-        elements.append(Paragraph("All Files Touched by Author", sH2))
+        elements.append(Paragraph("Tutti i File Modificati dall'Autore", sH2))
         elements.append(Paragraph(
-            f"{len(file_analysis)} unique files modified across {rd['total_commits']} commits",
+            f"{len(file_analysis)} file unici modificati in {rd['total_commits']} commit",
             sBody))
         fa_sorted = sorted(file_analysis.values(), key=lambda x: -x["commits"])
         file_header = [
-            Paragraph("<b>File Path</b>", sCell),
-            Paragraph("<b>Category</b>", sCell),
-            Paragraph("<b>Ext</b>", sCell),
-            Paragraph("<b>Commits</b>", sCell),
-            Paragraph("<b>Lines +</b>", sCell),
-            Paragraph("<b>Lines −</b>", sCell),
-            Paragraph("<b>Net</b>", sCell),
+            Paragraph("<b>Percorso File</b>", sCell),
+            Paragraph("<b>Categoria</b>", sCell),
+            Paragraph("<b>Est</b>", sCell),
+            Paragraph("<b>Commit</b>", sCell),
+            Paragraph("<b>Righe +</b>", sCell),
+            Paragraph("<b>Righe −</b>", sCell),
+            Paragraph("<b>Netto</b>", sCell),
         ]
         file_rows = [file_header]
         for fa in fa_sorted:
@@ -3057,20 +3068,20 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         ]))
         elements.append(ft)
 
-    # ═══ FULL COMMIT LOG ═══
+    # ═══ LOG COMPLETO DEI COMMIT ═══
     elements.append(PageBreak())
-    elements.append(Paragraph("Complete Commit History", sH2))
+    elements.append(Paragraph("Storico Completo dei Commit", sH2))
     elements.append(Paragraph(
-        f"{len(enriched)} commits from {rd['first_date']} to {rd['last_date']}  ·  "
+        f"{len(enriched)} commit dal {rd['first_date']} al {rd['last_date']}  ·  "
         f"Branch: {rd['branch']}", sBody))
 
     commit_header = [
         Paragraph("<b>SHA</b>", sCell),
-        Paragraph("<b>Date</b>", sCell),
-        Paragraph("<b>Message</b>", sCell),
+        Paragraph("<b>Data</b>", sCell),
+        Paragraph("<b>Messaggio</b>", sCell),
         Paragraph("<b>+</b>", sCell),
         Paragraph("<b>−</b>", sCell),
-        Paragraph("<b>Files</b>", sCell),
+        Paragraph("<b>File</b>", sCell),
     ]
     commit_rows = [commit_header]
     for c in enriched:
@@ -3106,11 +3117,11 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
     ]))
     elements.append(ct)
 
-    # ═══ PER-COMMIT FILE DETAILS ═══
+    # ═══ DETTAGLIO FILE PER COMMIT ═══
     elements.append(PageBreak())
-    elements.append(Paragraph("Detailed File Changes per Commit", sH2))
+    elements.append(Paragraph("Dettaglio delle Modifiche ai File per Commit", sH2))
     elements.append(Paragraph(
-        "Each commit with its individual file-level additions, deletions and change status.",
+        "Ogni commit con le relative aggiunte, rimozioni e stato delle modifiche a livello di file.",
         sBody))
 
     for c in enriched:
@@ -3123,10 +3134,10 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
 
         rows = [[
             Paragraph("<b>File</b>", sCell),
-            Paragraph("<b>Status</b>", sCell),
+            Paragraph("<b>Stato</b>", sCell),
             Paragraph("<b>+</b>", sCell),
             Paragraph("<b>−</b>", sCell),
-            Paragraph("<b>Total</b>", sCell),
+            Paragraph("<b>Totale</b>", sCell),
         ]]
         for fd in file_detail:
             rows.append([
@@ -3155,14 +3166,14 @@ def _gen_author_pdf(rd, enriched, file_analysis, chart_images):
         elements.append(fdt)
         elements.append(Spacer(1, 10))
 
-    # ── End-of-report marker ──
+    # ── Marcatore di fine report ──
     elements.append(Spacer(1, 30))
-    elements.append(Paragraph("— End of Report —", ParagraphStyle(
+    elements.append(Paragraph("— Fine del Report —", ParagraphStyle(
         "EndMark", fontName="Helvetica-Bold", fontSize=10,
         textColor=MUTED, alignment=TA_CENTER, leading=14)))
     elements.append(Spacer(1, 8))
     elements.append(Paragraph(
-        f"Generated by GAM Software PM · ISO 27001 Compliance Platform · "
+        f"Generato da GAM Software PM · Piattaforma di Conformità ISO 27001 · "
         f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M UTC')}", sFooter))
 
     doc.build(elements, onFirstPage=_on_page, onLaterPages=_on_page)
@@ -3196,39 +3207,39 @@ def main():
             <div class="sidebar-brand">
                 <img src="data:image/png;base64,{logo}" alt="">
                 <div><div class="n">GAM Software PM</div>
-                <div class="t">ISO 27001 Compliance Platform</div></div>
+                <div class="t">Piattaforma di Conformit\u00e0 ISO 27001</div></div>
             </div>''', unsafe_allow_html=True)
         else:
             st.markdown("### GAM Software PM")
-            st.caption("ISO 27001 Compliance Platform")
+            st.caption("Piattaforma di Conformit\u00e0 ISO 27001")
 
         st.markdown("")
 
         repo_url = st.text_input(
-            "Repository URL",
+            "URL del Repository",
             value=st.session_state.get("repo_url", ""),
             placeholder="https://github.com/owner/repo/tree/branch",
-            help="Paste a GitHub URL. Include /tree/branch to target a specific branch.",
+            help="Incolla un URL GitHub. Includi /tree/branch per selezionare un branch specifico.",
         )
 
         lc, rc = st.columns(2)
         with lc:
-            load_btn = st.button("Load", type="primary", width='stretch')
+            load_btn = st.button("Carica", type="primary", width='stretch')
         with rc:
-            refresh_btn = st.button("Refresh", width='stretch')
+            refresh_btn = st.button("Aggiorna", width='stretch')
 
         st.markdown("---")
 
-        section = st.radio("Navigation", NAV_SECTIONS, index=0)
+        section = st.radio("Navigazione", NAV_SECTIONS, index=0)
 
         st.markdown("---")
 
         # Token status indicator
         if GITHUB_TOKEN:
             _tok_preview = GITHUB_TOKEN[:8] + "..." + GITHUB_TOKEN[-4:]
-            st.caption(f"🟢 API Token loaded (`{_tok_preview}`)")
+            st.caption(f"🟢 Token API caricato (`{_tok_preview}`)")
         else:
-            st.caption("🔴 No API token — unauthenticated (60 req/hr limit)")
+            st.caption("🔴 Nessun token API — non autenticato (limite 60 req/ora)")
 
         if "branch_data" in st.session_state and st.session_state.branch_data:
             d = st.session_state.branch_data
@@ -3246,11 +3257,11 @@ def main():
                 info = _fetch_repo(owner, repo)
                 if not info or not info.get("default_branch"):
                     raise RuntimeError(
-                        f"Repository '{owner}/{repo}' not found or not accessible. "
-                        "Check the URL and ensure your token has access."
+                        f"Repository '{owner}/{repo}' non trovato o non accessibile. "
+                        "Controlla l'URL e assicurati che il token abbia accesso."
                     )
                 branch_hint = info.get("default_branch", "main")
-            with st.spinner(f"Loading {owner}/{repo} @ {branch_hint}..."):
+            with st.spinner(f"Caricamento {owner}/{repo} @ {branch_hint}..."):
                 if refresh_btn:
                     st.cache_data.clear()
                 data = collect_branch_data(owner, repo, branch_hint)
@@ -3271,35 +3282,35 @@ def main():
             <div class="hw-icon"><img src="data:image/png;base64,{_inline_logo()}" alt="GAM"></div>
             <div class="hw-title">GAM Software PM</div>
             <div class="hw-sub">
-                ISO 27001 Compliance &amp; Project Management Platform<br>
-                Paste a GitHub repository URL in the sidebar and click <b>Load</b> to begin.
+                Piattaforma di Conformit\u00e0 ISO 27001 e Gestione Progetti<br>
+                Incolla un URL di un repository GitHub nella barra laterale e clicca <b>Carica</b> per iniziare.
             </div>
             <div class="hw-tags">
-                <b>Branch-level intelligence</b> &middot;
-                <b>Asset inventory</b> &middot;
-                <b>Change management</b> &middot;
-                <b>Audit documentation</b>
+                <b>Analisi a livello di branch</b> &middot;
+                <b>Inventario degli asset</b> &middot;
+                <b>Gestione delle modifiche</b> &middot;
+                <b>Documentazione di audit</b>
             </div>
         </div>""", unsafe_allow_html=True)
         return
 
     st.markdown(
-        f'<div class="ts-bar">Data fetched {_fmt(D["fetched_at"], "%Y-%m-%d %H:%M:%S UTC")} \u00b7 '
-        f'Auto-refresh: {CACHE_TTL}s \u00b7 '
-        f'<a href="{D["repo_url"]}" target="_blank">Open on GitHub \u2197</a></div>',
+        f'<div class="ts-bar">Dati aggiornati al {_fmt(D["fetched_at"], "%Y-%m-%d %H:%M:%S UTC")} \u00b7 '
+        f'Aggiornamento automatico: {CACHE_TTL}s \u00b7 '
+        f'<a href="{D["repo_url"]}" target="_blank">Apri su GitHub \u2197</a></div>',
         unsafe_allow_html=True,
     )
 
     routes = {
-        "\U0001f4ca Command Center": page_command_center,
-        "\U0001f4e6 Asset Inventory": page_asset_inventory,
-        "\U0001f4dc Change Ledger": page_change_ledger,
-        "\U0001f510 Access Registry": page_access_registry,
-        "\U0001f6a8 Incident Log": page_incident_log,
-        "\U0001f500 Pull Requests": page_pull_requests,
-        "\U0001f9e0 Author Intelligence": page_author_intelligence,
-        "\U0001f4c5 Project Timeline": page_project_timeline,
-        "\U0001f6e1\ufe0f Compliance Hub": page_compliance_hub,
+        "\U0001f4ca Centro di Comando": page_command_center,
+        "\U0001f4e6 Inventario degli Asset": page_asset_inventory,
+        "\U0001f4dc Registro delle Modifiche": page_change_ledger,
+        "\U0001f510 Registro degli Accessi": page_access_registry,
+        "\U0001f6a8 Registro degli Incidenti": page_incident_log,
+        "\U0001f500 Pull Request": page_pull_requests,
+        "\U0001f9e0 Analisi dei Contributori": page_author_intelligence,
+        "\U0001f4c5 Cronologia del Progetto": page_project_timeline,
+        "\U0001f6e1\ufe0f Centro Conformit\u00e0": page_compliance_hub,
     }
 
     handler = routes.get(section)
