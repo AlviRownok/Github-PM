@@ -360,44 +360,66 @@ CUSTOM_CSS = """
         transform: translateY(-1px);
     }
 
-    /* ─── Select Boxes & Inputs ─── */
+    /* ─── Select Boxes & Inputs (sidebar / global) ─── */
     .stSelectbox > div > div,
     .stMultiSelect > div > div,
     .stNumberInput > div > div,
-    .stDateInput > div > div {
-        border-color: #d4cef0 !important;
-        border-radius: 10px !important;
-        background: #ffffff !important;
-    }
+    .stDateInput > div > div,
     .stTextInput > div > div {
         border-color: #d4cef0 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
     }
-    .stMainBlockContainer .stTextInput > div > div {
+
+    /* ─── Uniform Input Design (Main Content) ─── */
+    .stMainBlockContainer .stTextInput > div > div,
+    .stMainBlockContainer .stDateInput > div > div,
+    .stMainBlockContainer .stNumberInput > div > div,
+    .stMainBlockContainer .stSelectbox > div > div,
+    .stMainBlockContainer .stMultiSelect > div > div {
         border: 1px solid #e4e0f0 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
         box-shadow: none !important;
     }
+    /* Uniform focus ring */
+    .stMainBlockContainer .stTextInput > div > div:focus-within,
+    .stMainBlockContainer .stDateInput > div > div:focus-within,
+    .stMainBlockContainer .stNumberInput > div > div:focus-within,
+    .stMainBlockContainer .stSelectbox > div > div:focus-within {
+        border-color: #7c5cfc !important;
+        box-shadow: 0 0 0 1px #7c5cfc !important;
+    }
+    /* Remove inner input border so container owns the outline */
     .stMainBlockContainer .stTextInput input,
-    .stMainBlockContainer .stTextInput input[class] {
+    .stMainBlockContainer .stTextInput input[class],
+    .stMainBlockContainer .stDateInput input,
+    .stMainBlockContainer .stNumberInput input {
         border-color: transparent !important;
-        border-radius: 0 !important;
         background: transparent !important;
         outline: none !important;
         box-shadow: none !important;
     }
-    .stMainBlockContainer .stTextInput > div > div:focus-within {
-        border-color: #7c5cfc !important;
-        box-shadow: 0 0 0 1px #7c5cfc !important;
-    }
-    .stSelectbox > div > div > div[data-baseweb="select"] span,
-    .stSelectbox [data-baseweb="select"] .st-eh,
-    .stSelectbox [data-baseweb="select"] div[value] {
+    /* Bold, dark text for filled input values */
+    .stMainBlockContainer .stTextInput input,
+    .stMainBlockContainer .stDateInput input,
+    .stMainBlockContainer .stNumberInput input {
         color: #1a1040 !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
     }
+    .stMainBlockContainer .stSelectbox [data-baseweb="select"] span,
+    .stMainBlockContainer .stSelectbox [data-baseweb="select"] div[value] {
+        color: #1a1040 !important;
+        font-weight: 600 !important;
+    }
+    /* Placeholder text stays light */
+    .stMainBlockContainer .stTextInput input::placeholder,
+    .stMainBlockContainer .stDateInput input::placeholder,
+    .stMainBlockContainer .stNumberInput input::placeholder {
+        color: #a099c0 !important;
+        font-weight: 400 !important;
+    }
+    /* Labels */
     .stSelectbox label, .stMultiSelect label, .stTextInput label,
     .stNumberInput label, .stDateInput label, .stTextArea label {
         color: #4a3d8f !important; font-weight: 500 !important;
