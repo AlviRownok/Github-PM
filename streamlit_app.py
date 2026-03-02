@@ -375,7 +375,7 @@ CUSTOM_CSS = """
         background: #ffffff !important;
     }
     .stMainBlockContainer .stTextInput > div > div {
-        border: 1.5px solid #d4cef0 !important;
+        border: 1px solid #e4e0f0 !important;
         border-radius: 10px !important;
         background: #ffffff !important;
         box-shadow: none !important;
