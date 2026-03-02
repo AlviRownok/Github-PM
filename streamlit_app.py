@@ -7,6 +7,7 @@ and automated project monitoring.
 import os
 import json
 import base64
+import time
 import datetime as dt
 import io
 from urllib.parse import urlparse
@@ -575,17 +576,23 @@ def _gh_headers():
 
 
 def _gh_get(path: str, params=None):
-    resp = requests.get(f"{GITHUB_API}{path}", headers=_gh_headers(),
-                        params=params or {}, timeout=20)
-    if resp.status_code in (202, 204, 404):
-        return None
-    if resp.status_code >= 400:
-        try:
-            msg = resp.json().get("message", f"HTTP {resp.status_code}")
-        except Exception:
-            msg = f"HTTP {resp.status_code}"
-        raise RuntimeError(f"GitHub API {resp.status_code}: {msg}")
-    return resp.json()
+    _RETRYABLE = (502, 503, 504)
+    for attempt in range(4):
+        resp = requests.get(f"{GITHUB_API}{path}", headers=_gh_headers(),
+                            params=params or {}, timeout=20)
+        if resp.status_code in (202, 204, 404):
+            return None
+        if resp.status_code in _RETRYABLE and attempt < 3:
+            time.sleep(1.5 * (attempt + 1))
+            continue
+        if resp.status_code >= 400:
+            try:
+                msg = resp.json().get("message", f"HTTP {resp.status_code}")
+            except Exception:
+                msg = f"HTTP {resp.status_code}"
+            raise RuntimeError(f"GitHub API {resp.status_code}: {msg}")
+        return resp.json()
+    return None
 
 
 def _gh_put(path: str, payload: dict):
