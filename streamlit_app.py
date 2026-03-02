@@ -580,8 +580,14 @@ def _gh_get(path: str, params=None):
     for attempt in range(4):
         resp = requests.get(f"{GITHUB_API}{path}", headers=_gh_headers(),
                             params=params or {}, timeout=20)
-        if resp.status_code in (202, 204, 404):
+        if resp.status_code in (204, 404):
             return None
+        # 202 = GitHub is computing stats; retry after a short wait
+        if resp.status_code == 202 and attempt < 3:
+            time.sleep(2.0 * (attempt + 1))
+            continue
+        if resp.status_code == 202:
+            return None  # still computing after all retries
         if resp.status_code in _RETRYABLE and attempt < 3:
             time.sleep(1.5 * (attempt + 1))
             continue
@@ -763,23 +769,28 @@ def collect_branch_data(owner, repo, branch):
     if branch != default_branch:
         try:
             compare = _fetch_compare(owner, repo, default_branch, branch)
-            compare_shas = {c.get("sha") for c in compare.get("commits", []) if c.get("sha")}
             ahead_by = compare.get("ahead_by", 0)
-            merge_base_sha = (compare.get("merge_base_commit") or {}).get("sha")
-            if compare_shas and len(compare_shas) >= ahead_by:
-                # Compare API gave us the full set of unique commits
-                raw_commits = [c for c in all_commits if c.get("sha") in compare_shas]
-            elif merge_base_sha:
-                # Compare API truncated; walk from tip to merge-base
-                raw_commits = []
-                for c in all_commits:
-                    if c.get("sha") == merge_base_sha:
-                        break
-                    raw_commits.append(c)
+            if ahead_by == 0:
+                # Branch is even with default (e.g. after a merged PR);
+                # show all commits on the branch instead of an empty set.
+                raw_commits = all_commits
             else:
-                # Fallback to SHA exclusion
-                default_shas = _fetch_default_shas(owner, repo, default_branch)
-                raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
+                compare_shas = {c.get("sha") for c in compare.get("commits", []) if c.get("sha")}
+                merge_base_sha = (compare.get("merge_base_commit") or {}).get("sha")
+                if compare_shas and len(compare_shas) >= ahead_by:
+                    # Compare API gave us the full set of unique commits
+                    raw_commits = [c for c in all_commits if c.get("sha") in compare_shas]
+                elif merge_base_sha:
+                    # Compare API truncated; walk from tip to merge-base
+                    raw_commits = []
+                    for c in all_commits:
+                        if c.get("sha") == merge_base_sha:
+                            break
+                        raw_commits.append(c)
+                else:
+                    # Fallback to SHA exclusion
+                    default_shas = _fetch_default_shas(owner, repo, default_branch)
+                    raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
         except Exception:
             default_shas = _fetch_default_shas(owner, repo, default_branch)
             raw_commits = [c for c in all_commits if c.get("sha") not in default_shas]
@@ -1095,6 +1106,24 @@ def page_command_center(D):
         st.plotly_chart(fig, width='stretch')
     else:
         st.caption("Weekly activity data not yet available from GitHub.")
+
+    with st.expander("How is Branch Health calculated?"):
+        st.markdown("""
+| Factor | Condition | Points |
+|---|---|---|
+| **Commit Recency** | Last commit ≤ 7 days | +20 |
+| | Last commit ≤ 30 days | +12 |
+| | Last commit ≤ 90 days | +5 |
+| | Last commit > 90 days | −10 |
+| | No commits | −15 |
+| **Issue Resolution** | Closed / Total issues × 15 | 0 – 15 |
+| **PR Merge Rate** | Merged / Total PRs × 15 | 0 – 15 |
+| **Team Size** | ≥ 3 contributors | +10 |
+| | 2 contributors | +5 |
+
+Base score is **50**. Final score is clamped to 0 – 100.  
+≥ 70 = Healthy · 40 – 69 = Fair · < 40 = Needs Attention
+""")
 
     st.markdown("#### Recent Commits on Branch")
     if commits[:25]:
@@ -2147,6 +2176,9 @@ Generated: {{ now }} &middot; Scope: Branch-level software development audit</di
 <div class="cd"><div class="l">Pull Requests</div><div class="v">{{ n_prs }}</div></div>
 <div class="cd"><div class="l">Health Score</div><div class="v">{{ health }}/100</div></div>
 </div>
+<p style="margin-top:14px;font-size:.85rem;color:#6b7280;"><strong>Health Score Methodology:</strong>
+Base score 50. Commit ≤7 d → +20, ≤30 d → +12, ≤90 d → +5, >90 d → −10, none → −15.
+Issue close ratio × 15 pts. PR merge ratio × 15 pts. ≥3 contributors → +10, 2 → +5. Clamped 0–100.</p>
 </div>
 {% endif %}
 
@@ -2437,7 +2469,14 @@ def _gen_compliance_pdf(D, sections):
             ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ]))
         elements.append(kt)
-        elements.append(Spacer(1, 12))
+        elements.append(Spacer(1, 8))
+        elements.append(Paragraph(
+            '<b>Health Score Methodology:</b> Base score 50. '
+            'Commit ≤7 d → +20, ≤30 d → +12, ≤90 d → +5, >90 d → −10, none → −15. '
+            'Issue close ratio × 15 pts. PR merge ratio × 15 pts. '
+            '≥3 contributors → +10, 2 → +5. Clamped 0–100.',
+            ParagraphStyle("CMethod", fontName="Helvetica", fontSize=8,
+                           textColor=MUTED, leading=12, spaceAfter=10)))
 
     # ═══ ASSET INVENTORY (A.8) ═══
     if "Asset Inventory (A.8)" in sections:
