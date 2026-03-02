@@ -382,12 +382,8 @@ CUSTOM_CSS = """
     }
     .stMainBlockContainer .stTextInput input,
     .stMainBlockContainer .stTextInput input[class] {
-        border: none !important;
-        border-top: none !important;
-        border-right: none !important;
-        border-bottom: none !important;
-        border-left: none !important;
-        border-radius: 10px !important;
+        border-color: transparent !important;
+        border-radius: 0 !important;
         background: transparent !important;
         outline: none !important;
         box-shadow: none !important;
