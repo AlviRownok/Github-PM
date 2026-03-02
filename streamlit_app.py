@@ -1772,7 +1772,8 @@ def page_project_timeline(D):
     with ec1:
         ext_date = st.date_input("New Extended Deadline", value=dt.date.today(), key="tl_ext_date")
     with ec2:
-        ext_reason = st.text_input("Reason for Extension", placeholder="e.g. Scope change, resource delay...", key="tl_ext_reason")
+        #ext_reason = st.text_input("Reason for Extension", placeholder="e.g. Scope change, resource delay...", key="tl_ext_reason")
+        ext_reason = st.text_input("Reason for Extension", key="tl_ext_reason")
 
     ebc1, ebc2, ebc3 = st.columns([1, 1, 2])
     with ebc1:
