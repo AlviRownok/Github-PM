@@ -375,31 +375,25 @@ CUSTOM_CSS = """
         background: #ffffff !important;
     }
     .stMainBlockContainer .stTextInput > div > div {
-        border: none !important;
+        border: 1.5px solid #d4cef0 !important;
+        border-radius: 10px !important;
+        background: #ffffff !important;
         box-shadow: none !important;
-        background: transparent !important;
-        padding: 0 !important;
-        overflow: visible !important;
     }
     .stMainBlockContainer .stTextInput input,
     .stMainBlockContainer .stTextInput input[class] {
-        border: 1.5px solid #d4cef0 !important;
-        border-top: 1.5px solid #d4cef0 !important;
-        border-right: 1.5px solid #d4cef0 !important;
-        border-bottom: 1.5px solid #d4cef0 !important;
-        border-left: 1.5px solid #d4cef0 !important;
+        border: none !important;
+        border-top: none !important;
+        border-right: none !important;
+        border-bottom: none !important;
+        border-left: none !important;
         border-radius: 10px !important;
-        background: #ffffff !important;
+        background: transparent !important;
         outline: none !important;
         box-shadow: none !important;
     }
-    .stMainBlockContainer .stTextInput input:focus,
-    .stMainBlockContainer .stTextInput input[class]:focus {
-        border: 1.5px solid #7c5cfc !important;
-        border-top: 1.5px solid #7c5cfc !important;
-        border-right: 1.5px solid #7c5cfc !important;
-        border-bottom: 1.5px solid #7c5cfc !important;
-        border-left: 1.5px solid #7c5cfc !important;
+    .stMainBlockContainer .stTextInput > div > div:focus-within {
+        border-color: #7c5cfc !important;
         box-shadow: 0 0 0 1px #7c5cfc !important;
     }
     .stSelectbox > div > div > div[data-baseweb="select"] span,
